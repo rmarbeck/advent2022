@@ -12,7 +12,6 @@ import scala.math._
   val result2 = Cargo.stacks2.map(_.head).mkString
   println(s"1: $result1")
   println(s"2: $result2")
-  Cargo.displayingStacks
 
 object Cargo:
   var initialized = false
@@ -32,6 +31,7 @@ object Cargo:
     stacks1(source) = stacks1(source).splitAt(num)._2
     stacks2(dest) = stacks2(source).take(num) ++ stacks2(dest)
     stacks2(source) = stacks2(source).splitAt(num)._2
+    displayInplace
     //displayingStacks
   def initialize(rows: String): Unit =
     nbOfStacks = rows.replaceAll(" +", ",").split(',').reverse.head.toInt
@@ -55,17 +55,24 @@ object Cargo:
   def saveLine(lineContent: String): Unit =
     //println(s"saving line $lineContent")
     toFillWith = toFillWith :+ lineContent
+  def displayInplace: Unit =
+    displayingStacks
+    Thread.sleep(10)
+    print("\u001b[2J")
+
   def displayingStacks: Unit =
-    val range = stacks2.map(_.length).max to 0 by -1
-    println(range.map(outsideIndex =>
-      (0 to stacks2.length - 1).map(insideIndex =>
-        stacks2(insideIndex) match
-          case sequence if sequence.length > outsideIndex => s"[${sequence.reverse(outsideIndex)}]"
-          case _ => s"   "
-        ).mkString(" ")
-      ).mkString("\n")
-    )
+    val upperLimit = stacks2.map(_.length).max
+    val maxNumberOfElementsInStacksTo0 = upperLimit to 0 by -1
+    println:
+      maxNumberOfElementsInStacksTo0.map: level =>
+        stacks2.map:
+            case sequence if sequence.length > level => s"[${sequence.reverse(level)}]"
+            case _ => s"   "
+        .mkString(" ")
+      .mkString("\n")
+
     println((0 to stacks2.length - 1).map(insideIndex => s" $insideIndex  ").mkString)
+    println(s"->$upperLimit<-")
 
     //println(stacks.map(_.mkString("-")).mkString(","))
     ()
