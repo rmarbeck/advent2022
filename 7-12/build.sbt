@@ -1,6 +1,6 @@
 val scala3Version = "3.3.1"
 
-lazy val root = project
+lazy val advent7 = project
   .in(file("."))
   .settings(
     name := "7-12",

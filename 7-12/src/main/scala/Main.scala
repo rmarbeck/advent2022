@@ -1,8 +1,6 @@
-  import scala.collection.mutable
-  import scala.io.Source
-  import scala.reflect.{ClassTag, TypeTest}
-
-// Right :-/ result is
+import scala.collection.mutable
+import scala.io.Source
+import scala.reflect.{ClassTag, TypeTest}
 
 @main def hello: Unit =
   println("Launching 7-12")
@@ -19,7 +17,7 @@ object Solver:
   def solve: (String, String) =
     solver("data.txt")
   private def solver(fileName: String): (String, String) =
-    val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
+    val bufferedSource = Source.fromResource(fileName)
     val lines = bufferedSource.getLines().toSeq
 
     val commands = lines.map:

@@ -17,7 +17,7 @@ object Solver:
   def solve: (String, String) =
     solver("data.txt")
   private def solver(fileName: String): (String, String) =
-    val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
+    val bufferedSource = Source.fromResource(fileName)
     val lines = bufferedSource.getLines().toSeq
     //lines.zipWithIndex.foreach((line, index) => println(s"$index => ${fromLine(line)}"))
     val result1 = lines.map(fromLine(_, 4)).mkString("-")

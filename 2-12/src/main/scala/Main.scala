@@ -20,7 +20,7 @@ object Solver:
   def solve: (String, String) =
     solver("data.txt")
   private def solver(fileName: String): (String, String) =
-    val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
+    val bufferedSource = Source.fromResource(fileName)
     val lines = bufferedSource.getLines().toList
     bufferedSource.close
     val (result1, result2) = lines.map(calc).foldLeft((0, 0)):
