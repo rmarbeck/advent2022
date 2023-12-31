@@ -1,24 +1,58 @@
+import scala.annotation.tailrec
 import scala.io.Source
-import scala.math._
+import scala.math.*
+
+import java.time.Duration
+import java.time.Instant
 
 @main def hello: Unit =
-  println("Launching 2-12")
-  val bufferedSource = Source.fromFile("./src/main/resources/test1.txt")
-  val data = bufferedSource.getLines().toSeq
-  val result1 = data.map(currentLine => currentLine.splitAt(currentLine.length/2)).map((start, end)=> start.find(end.contains(_)).map(charToItsIntValue).getOrElse(0)).toSeq
-  val result2 = data.zipWithIndex.map((line, index) => if ((index+1)%3==0) {line+";"} else {line+","}).mkString.split(';').map:
-    case s"$part1,$part2,$part3" => commonChar(part1, part2, part3)
-  .map(charToItsIntValue).toSeq
-  println(s"1 : ${result1.sum}")
-  println(s"1 : ${result2.sum}")
-  bufferedSource.close
+  val startTime = Instant.now()
+  println("Launching 3-12")
+  List[() => (String, String)]( () => Solver.solveTest, () => Solver.solve).foreach: f =>
+    val (score1, score2) = f.apply()
+    println(s"1 : ${score1}")
+    println(s"2 : ${score2}")
+    println(s"----------------")
   println("Done")
+  println(s"Computing time is ${Duration.between(startTime, Instant.now()).toMillis}ms")
+
+object Solver:
+  def solveTest: (String, String) =
+    solver("test.txt")
+  def solve: (String, String) =
+    solver("data.txt")
+  private def solver(fileName: String): (String, String) =
+    val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
+    val lines = bufferedSource.getLines().toList
+    bufferedSource.close
+
+    def groupAndSumChar(groupSize: Int, data: List[String]): Int =
+      data.sliding(groupSize, groupSize).foldLeft(0):
+        case (acc, newValue) => acc + commonChar(newValue).getValue
+
+    val result1 = groupAndSumChar(2, lines.flatMap: currentLine =>
+      val (first, second) = currentLine.splitAt(currentLine.length / 2)
+      List(first,second)
+    )
+
+    val result2 = groupAndSumChar(3, lines)
 
 
-def charToItsIntValue(character: Char): Int =
-  if (character.isLower)
-    return character.toInt - 96
-  character.toInt - 38
+    (s"${result1}", s"${result2}")
 
-def commonChar(part1: String, part2: String, part3: String): Char =
-  part1.filter(part2.contains(_)).filter(part3.contains(_)).head
+class ValuedChar(character: Char):
+  //val rankedChars1 = ('A' to 'z').filter(_.isLetter).partition(_.isLower) match
+  //  case (lower, upper) => lower.concat(upper).mkString
+  private val rankedChars = ('a' to 'z') ++ ('A' to 'Z').mkString
+  def getValue: Int =
+    rankedChars.indexOf(character) + 1
+
+def commonChar(values: Seq[String]): ValuedChar =
+  @tailrec
+  def findCommon(values: Seq[String], found: Seq[Char]): Option[Char] =
+    values match
+      case Nil => found.headOption
+      case _ => findCommon(values.tail, found.filter(values.head.contains(_)))
+  findCommon(values.tail, values.head) match
+    case Some(value) => ValuedChar(value)
+    case _ => throw Exception("Not supported")

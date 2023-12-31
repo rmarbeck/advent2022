@@ -1,4 +1,4 @@
-import scala.io.Source
+  import scala.io.Source
 
 // Right :-/ result is
 
