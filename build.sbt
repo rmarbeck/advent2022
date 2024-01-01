@@ -1,5 +1,7 @@
 val scala3Version = "3.3.1"
 
+Common.settings
+
 lazy val advent2022 = (project
   .in(file("."))
   .settings(
@@ -13,14 +15,13 @@ lazy val advent2022 = (project
   .aggregate(projects*)
   .dependsOn(classPaths*)
 
-val foundDirsWithBuildFile: Seq[String] = {
-  val finder: PathFinder = file(".") ** "build.sbt"
-  val result = finder.get.map(_.getParent).filter(_.contains("-12")).map(_.split('/')(1))
-  result
+lazy val dirs = new File(".").listFiles().filter(_.isDirectory).filter(_.name.contains("-12"))
+val subprojects = new CompositeProject {
+  override def componentProjects: Seq[Project] = dirs.map { p =>
+    Project(s"advent${p.getName.dropRight(3)}", p)
+  }
 }
-val projects = foundDirsWithBuildFile.map(current => ProjectRef(file(s"./${current}"), s"advent${current.dropRight(3)}")).toSeq
 
-val classPaths = projects.map(ClasspathDependency(_, None))
+val projects = subprojects.componentProjects.map(m => m : ProjectReference)
+val classPaths = subprojects.componentProjects.map(m => m : ClasspathDependency)
 
-//lazy val `advent-08` = project
-//lazy val `advent-07` = project
