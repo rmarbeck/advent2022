@@ -15,10 +15,10 @@ lazy val advent2022 = (project
   .aggregate(projects*)
   .dependsOn(classPaths*)
 
-lazy val dirs = new File(".").listFiles().filter(_.isDirectory).filter(_.name.contains("-12"))
+lazy val dirs = new File(".").listFiles().filter(_.isDirectory).filter(_.name.contains("day"))
 val subprojects = new CompositeProject {
   override def componentProjects: Seq[Project] = dirs.map { p =>
-    Project(s"advent${p.getName.dropRight(3)}", p)
+    Project(s"advent${p.getName}", p)
   }
 }
 
