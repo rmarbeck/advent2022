@@ -43,50 +43,48 @@ class Container(input: Seq[String]):
   val height: Int = input.length
   private val data: Array[Array[Char]] = input.toArray.map(_.toArray)
 
-  lazy val charsAtoZ = ('a' to 'z').toArray
+  private lazy val charsAtoZ = ('a' to 'z').toArray
 
-  def solvePart1 = Dijkstra.solve(asGraph, findStart, List(findEnd))
+  def solvePart1 = Dijkstra.solve(asGraphPart1, findStart, List(findEnd))
 
   def solvePart2 = Dijkstra.solve(asGraphPart2, findEnd, findA.toList)
 
-  def find(char: Char): Summit =
+  private def find(char: Char): Summit =
     val row = data.indexWhere(_.contains(char))
     val col = data(row).indexOf(char)
     Summit(row, col, char)
 
-  def findStart = find('S')
+  private def findStart = find('S')
 
-  def findEnd = find('E')
+  private def findEnd = find('E')
 
-  def findA = for row <- 0 until height
-                  col <- 0 until width
-                  if (data(row)(col) == 'a')
-              yield
-                Summit(row, col, data(row)(col))
+  private def findA =
+    for row <- 0 until height
+        col <- 0 until width
+        if data(row)(col) == 'a'
+    yield
+        Summit(row, col, data(row)(col))
 
-  def asGraph: GraphFromArrayUnWeighted =
-    val summits = for row <- 0 until height
-        col <- 0 until width yield
-      Summit(row, col, data(row)(col))
+  private def generateSummits = for row <- 0 until height
+                                    col <- 0 until width yield
+    Summit(row, col, data(row)(col))
 
+  private def asGraphPart1: GraphFromArrayUnWeighted =
     given start: Char = 'S'
     given endChars: List[Char] = List('E')
     given ordered: Array[Char] = charsAtoZ
-    GraphFromArrayUnWeighted(summits)(next)
+    GraphFromArrayUnWeighted(generateSummits)(next)
 
-  def asGraphPart2: GraphFromArrayUnWeighted =
-    val summits = for row <- 0 until height
-                      col <- 0 until width yield
-      Summit(row, col, data(row)(col))
+  private def asGraphPart2: GraphFromArrayUnWeighted =
     given start: Char = 'E'
     given endChars: List[Char] = List('a', 'S')
     given ordered: Array[Char] = charsAtoZ.tail.reverse
-    GraphFromArrayUnWeighted(summits)(next)
+    GraphFromArrayUnWeighted(generateSummits)(next)
 
-  def next(summit: Summit)(implicit start: Char, endChars: List[Char], ordered: Array[Char]): Seq[Summit] =
+  private def next(summit: Summit)(implicit start: Char, endChars: List[Char], ordered: Array[Char]): Seq[Summit] =
     next(summit.row, summit.col).map((curRow, curCol) => Summit(curRow, curCol, data(curRow)(curCol)))
 
-  def next(row: Int, col: Int)(implicit start: Char, endChars: List[Char], ordered: Array[Char]): Seq[(Int, Int)] =
+  private def next(row: Int, col: Int)(implicit start: Char, endChars: List[Char], ordered: Array[Char]): Seq[(Int, Int)] =
     val currentChar = data(row)(col)
     Seq((row-1, col), (row+1, col), (row, col-1), (row, col+1)).filter:
       data.isDefinedAt(_) && data(row).isDefinedAt(_)
@@ -101,7 +99,7 @@ class Container(input: Seq[String]):
         case value if ordered.indexOf(value) <= ordered.indexOf(currentChar) + 1 => true
         case _ => false
 
-  def asString(data: Array[Array[Char]]) =
+  private def asString(data: Array[Array[Char]]) =
     data.map(_.mkString(" ")).mkString("\n")
 
   override def toString =

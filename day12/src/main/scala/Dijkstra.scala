@@ -18,7 +18,7 @@ trait Graph[T]:
   def weightBetween(first: Data[T], second: Data[T]): Long
   def getNeighboursOfIn(current: Data[T], potentialNeighbours: Seq[Data[T]]): Seq[Data[T]]
 
-class Data[T](element: T, private var currentDistance: Long = Long.MaxValue - 1):
+class Data[T](element: T, private var currentDistance: Long = Long.MaxValue):
   def getElement = element
   private var precedingElement: Option[Data[T]] = None
   def getPreceding: Data[T] = precedingElement.get
@@ -30,23 +30,24 @@ class Data[T](element: T, private var currentDistance: Long = Long.MaxValue - 1)
   override def toString: String = s"{$element, $getCurrentDistance}"
 
 object Dijkstra:
+  def solve[T](graph: Graph[T], startingFrom: T, elementsToReach: List[T]): Int =
+    doSolve[T](graph.getListToExploreInitialisedFromStart(startingFrom).toList, Nil, elementsToReach)(graph)
+
   @tailrec
-  def doSolve[T](toExplore: List[Data[T]], explored: List[Data[T]], elementsToReach: List[T])(implicit graph: Graph[T]): Int =
+  private def doSolve[T](toExplore: List[Data[T]], explored: List[Data[T]], elementsToReach: List[T])(implicit graph: Graph[T]): Int =
     toExplore match
       case Nil => rewind(explored.head)
-      case _ if elementsToReach.find(explored.map(_.getElement).contains(_)).isDefined => rewind(explored.head)
-      case _ =>
-        val best = toExplore.sortBy(_.getCurrentDistance).head
+      case _ if  ! (explored.map(_.getElement) intersect elementsToReach).isEmpty => rewind(explored.head)
+      case best :: tail =>
         graph.getNeighboursOfIn(best, toExplore).foreach: neighbour =>
           val distance = best.getCurrentDistance + graph.weightBetween(best, neighbour)
           if (neighbour.getCurrentDistance > distance)
             neighbour.updateDistanceAndPreceding(distance, best)
 
-        doSolve(toExplore.filterNot(_ == best), best :: explored, elementsToReach)
-  def solve[T](graph: Graph[T], startingFrom: T, elementsToReach: List[T]): Int =
-    doSolve[T](graph.getListToExploreInitialisedFromStart(startingFrom).toList, Nil, elementsToReach)(graph)
+        doSolve(tail.sortBy(_.getCurrentDistance), best :: explored, elementsToReach)
 
-  def rewind[T](current: Data[T], counter: Int=0): Int =
+  @tailrec
+  private def rewind[T](current: Data[T], counter: Int=0): Int =
     current.getCurrentDistance match
       case 0 => counter
       case _ => rewind(current.getPreceding, counter + 1)
