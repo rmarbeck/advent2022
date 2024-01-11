@@ -16,6 +16,8 @@ val loggerAOCPart2 = Logger("aoc.part2")
     println(s"----------------")
   println("Done")
 
+type IRange = Range.Inclusive
+
 object Solver:
   def runOn(inputLines: Seq[String]): (String, String) =
 
@@ -28,10 +30,11 @@ object Solver:
 
     //val underSurveillance = sensors.flatMap(_.impossiblePositionsOnRow(row)).toSet
 
-    val result = sensors.foldLeft((Set[Int](), Set[Int]())) { (acc, sensor) =>
-      (acc._1 ++ sensor.impossiblePositionsOnRow(row), acc._2 ++ sensor.xPosIfClosestBeaconOnRow(row))
+    val result = sensors.tail.foldLeft((sensors.head.impossiblePositionsOnRow(row), Set[Int]() ++ sensors.head.xPosIfClosestBeaconOnRow(row))) { (acc, sensor) =>
+      (merge(acc._1, sensor.impossiblePositionsOnRow(row)), acc._2 ++ sensor.xPosIfClosestBeaconOnRow(row))
     } match
-      case (scanned, beacons) => scanned -- beacons
+      case (scanned, beacons) =>
+        (scanned.end - scanned.start + 1)- beacons.size
 
     //val presentBeacons = sensors.flatMap(_.xPosIfClosestBeaconOnRow(row)).toSet
     /*val result = sensors.foldLeft(underSurveillance2) { (acc, newValue) =>
@@ -43,7 +46,7 @@ object Solver:
 
     //val result = underSurveillance2.filterNot(presentBeacons.contains(_))
 
-    val result1 = s"${result.size}"
+    val result1 = s"${result}"
     val result2 = s""
 
     (s"${result1}", s"${result2}")
@@ -60,13 +63,15 @@ object Solver:
       case _ => runOn(lines)
 end Solver
 
+def merge(range1: IRange, range2: IRange): IRange = math.min(range1.start, range2.start) to math.max(range1.end, range2.end)
+
 case class Sensor(x: Int, y: Int, closestBeacon: Beacon):
-  def impossiblePositionsOnRow(row: Int): Set[Int] =
+  def impossiblePositionsOnRow(row: Int): IRange =
     val distanceToClosest = math.abs(x - closestBeacon.x) + math.abs(y - closestBeacon.y)
     val shortestDistanceToRow = math.abs(y - row)
     shortestDistanceToRow match
-      case value if value <= distanceToClosest => (x - (distanceToClosest - value) to x + (distanceToClosest - value)).toSet
-      case _ => Set()
+      case value if value <= distanceToClosest => x - (distanceToClosest - value) to x + (distanceToClosest - value)
+      case _ => 0 to 0
 
   def xPosIfClosestBeaconOnRow(row: Int): Option[Int] =
     closestBeacon.y == row match
