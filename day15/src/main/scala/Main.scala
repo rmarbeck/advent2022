@@ -1,5 +1,6 @@
 import scala.io.Source
 import com.typesafe.scalalogging.Logger
+import scala.collection.parallel.CollectionConverters._
 
 import scala.annotation.tailrec
 
@@ -25,30 +26,32 @@ object Solver:
     val sensors = inputLines.map:
       case s"Sensor at x=$sensorX, y=$sensorY: closest beacon is at x=$beaconX, y=$beaconY" => Sensor.fromStrings(List(sensorX, sensorY, beaconX, beaconY))
 
+    val (singleRowTest, singleRowData, maxRowsTest, maxRowsData, colFactor) = (10, 2000000, 20, 4000000, 4000000l)
+
     val row = sensors.length match
-      case 14 => 10
-      case _ => 2000000
+      case 14 => singleRowTest
+      case _ => singleRowData
 
     val rows = sensors.length match
-      case 14 => 0 to 20
-      case _ => 0 to 4000000
+      case 14 => 0 to maxRowsTest
+      case _ => 0 to maxRowsData
 
     //val underSurveillance = sensors.flatMap(_.impossiblePositionsOnRow(row)).toSet
 
-    val result = sensors.tail.foldLeft((sensors.head.impossiblePositionsOnRow(row), Set[Int]() ++ sensors.head.xPosIfClosestBeaconOnRow(row))) { (acc, sensor) =>
+    val resultPart1 = sensors.tail.foldLeft((sensors.head.impossiblePositionsOnRow(row), Set[Int]() ++ sensors.head.xPosIfClosestBeaconOnRow(row))) { (acc, sensor) =>
       (merge(acc._1, sensor.impossiblePositionsOnRow(row)), acc._2 ++ sensor.xPosIfClosestBeaconOnRow(row))
     } match
       case (scanned, beacons) =>
         scanned.size - beacons.size
 
-    val resultPart2 = rows.zipWithIndex.map((currentRow, index) => (sensors.tail.foldLeft(sensors.head.impossiblePositionsOnRow(currentRow)) { (acc, sensor) =>
+    val resultPart2 = rows.zipWithIndex.par.map((currentRow, index) => (sensors.tail.foldLeft(sensors.head.impossiblePositionsOnRow(currentRow)) { (acc, sensor) =>
       merge(acc, sensor.impossiblePositionsOnRow(currentRow))
     }.shrinkTo(rows.start, rows.end), index)).find(_._1.size == rows.end).map((rangeMatching, rowIndex) => (rowIndex, rangeMatching.findHoles(rows.start, rows.end))).map:
-      case (rowIndex, SingleRange(start, end)) => rowIndex.toLong + start.toLong * 4000000l
+      case (rowIndex, SingleRange(start, end)) => rowIndex.toLong + start.toLong * colFactor
       case _ => throw Exception("Not expected result")
     .getOrElse(0l)
 
-    val result1 = s"${result}"
+    val result1 = s"${resultPart1}"
     val result2 = s"${resultPart2}"
 
     (s"${result1}", s"${result2}")
