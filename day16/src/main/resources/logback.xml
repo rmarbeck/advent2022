@@ -4,7 +4,8 @@
       <pattern>%-5level %logger{36} -%kvp- %msg%n</pattern>
     </encoder>
   </appender>
-  <root level="debug">
+  <root level="info">
     <appender-ref ref="STDOUT" />
   </root>
+  <logger name="aoc.part2" level="info" />
 </configuration>
