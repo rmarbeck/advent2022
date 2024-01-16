@@ -32,15 +32,17 @@ object Solver:
     )
 
     println(maze)
-    val start = PartialResult(30, "AA", maze, 0, Nil)
+
     given ValveGraph = ValveGraph(maze)
 
-    println(s"${maze.valves(0).name} => ${maze.valves(6).name} : ${Proxy.get(maze.valves(0), maze.valves(6))}")
+    val start = PartialResult(30, "AA", maze, 0, Nil)
+
+    println(s"${maze.valves(0).name} => ${maze.valves(2).name} : ${Proxy.get(maze.valves(0), maze.valves(2))}")
     println(s"${maze.valves(0).name} => ${maze.valves(6).name} : ${Proxy.get(maze.valves(0), maze.valves(6))}")
 
     //println(start.maxPotential)
 
-    //println(s"Result found = ${solveMaze(List(start), None)}")
+    println(s"Result found = ${solveMaze(List(start), None)}")
 
     //println(maze.openValve(maze.get("HH")))
 
@@ -86,7 +88,7 @@ case class Maze(valves: Seq[Valve]):
 
 case class Valve(name: String, pressure: Int, valveNames: Seq[String])
 
-case class PartialResult(remainingSteps: Int, start: String, maze: Maze, currentPressure: Int, openedValves: List[String]) extends Ordered[PartialResult]:
+case class PartialResult(remainingSteps: Int, start: String, maze: Maze, currentPressure: Int, openedValves: List[String])(using graph: ValveGraph) extends Ordered[PartialResult]:
   override def compare(that: PartialResult): Int =
     def mazePressure(pr: PartialResult) = pr.maze.get(pr.start).pressure
     currentPressure.compare(that.currentPressure) match
@@ -95,21 +97,30 @@ case class PartialResult(remainingSteps: Int, start: String, maze: Maze, current
         case value => value
       case value => value
   lazy val simple: String = s"$start <-> $currentPressure <-> $openedValves <-> $remainingSteps <+> $maxPotential"
-  lazy val maxPotential: Int =
+  lazy val maxPotential2: Int =
     currentPressure + maze.valves.sortBy(_.pressure).reverse.zipWithIndex.map: (valve, index) =>
       valve.pressure * math.max(remainingSteps - index * 2, 0)
     .sum
+  lazy val maxPotential: Int =
+    currentPressure + distancesFrom(maze.get(start), remainingSteps - 1).map: (valve, distance) =>
+      valve.pressure * math.max(remainingSteps - distance - 1, 0)
+    .sum
   lazy val isASolution: Boolean = remainingSteps == 0
+
+  def distancesFrom(valve: Valve, distanceMax: Int) =
+    maze.valves.filterNot(_.pressure == 0).map: currentValve =>
+      (currentValve, Proxy.get(valve, currentValve))
+    .filter(_._2 < distanceMax)
   lazy val next: List[PartialResult] =
+
     isASolution match
       case true => Nil
       case _ =>
         val headValve = maze.get(start)
         headValve.pressure match
           case value if value != 0 && remainingSteps >= 2 =>
-            headValve.valveNames.flatMap: currentValveName =>
-              List(PartialResult(remainingSteps - 2, currentValveName, maze.openValve(headValve), currentPressure + (value * (remainingSteps - 1)), headValve.name +: openedValves),
-                PartialResult(remainingSteps - 1, currentValveName, maze, currentPressure, openedValves))
+            distancesFrom(headValve, remainingSteps).map:
+              case (valve, distance) => PartialResult(remainingSteps - distance - 1, valve.name, maze.openValve(valve), currentPressure + (valve.pressure * (remainingSteps - distance - 1)), valve.name +: openedValves)
             .toList
           case _ =>
             headValve.valveNames.map: currentValveName =>
@@ -118,7 +129,7 @@ case class PartialResult(remainingSteps: Int, start: String, maze: Maze, current
 
 
 @tailrec
-def solveMaze(currentPResults: List[PartialResult], bestSolutionFound: Option[PartialResult]): Int =
+def solveMaze(currentPResults: List[PartialResult], bestSolutionFound: Option[PartialResult])(using graph: ValveGraph): Int =
   currentPResults match
     case Nil => bestSolutionFound match
       case Some(value) => value.currentPressure
