@@ -40,8 +40,16 @@ object Solver:
       round = 0
     }
 
-    val result1 = s"${solveMaze(List(start), None)}"
+    /*val (emptyValves, nonEmptyValves) = maze.valves.sortBy(_.pressure).span(_.pressure == 0)
+
+    val mazes = nonEmptyValves.sortBy(_.pressure).combinations(nonEmptyValves.length/2).map(toOpen => maze.open(toOpen.toList))
+
+    println(resolve(26, "AA", mazes, maze))*/
+
+    val result1 = s"${solveMaze(List(start), None).currentPressure}"
     val result2 = s"${solveMazePart2(List(start2), None)}"
+
+
 
     (s"${result1}", s"${result2}")
 
@@ -57,6 +65,26 @@ object Solver:
       case _ => runOn(lines)
 end Solver
 
+@tailrec
+def resolve(steps: Int, start: String, mazes: Iterator[Maze], fullMaze: Maze, currentBest: Int = 0)(using graph: ValveGraph): Int =
+  mazes.hasNext match
+    case false => currentBest
+    case true =>
+      val head = mazes.next()
+      //val firstPart = solveMaze(List(PartialResult(steps, start, head, 0, Nil)), None)
+      val firstPart = SolverProxy.get(steps, start, head)
+      //val secondPart = solveMaze(List(PartialResult(steps, start, fullMaze.openByName(firstPart.openedValves), 0, Nil)), None)
+      val secondPart = SolverProxy.get(steps, start, fullMaze.openByName(firstPart.openedValves))
+      val newScore = firstPart.currentPressure + secondPart.currentPressure
+      println(s"${firstPart.currentPressure} + ${secondPart.currentPressure} = $newScore vs $currentBest")
+      resolve(steps, start, mazes, fullMaze, math.max(currentBest, newScore))
+
+
+object SolverProxy:
+  private val cache: mutable.HashMap[String, PartialResult] = mutable.HashMap[String, PartialResult]()
+  def get(steps: Int, start: String, maze: Maze)(using graph: ValveGraph): PartialResult =
+    cache.getOrElseUpdate(s"$steps$start${maze.canonical}", solveMaze(List(PartialResult(steps, start, maze, 0, Nil)), None))
+
 object Proxy:
   private val cache: mutable.HashMap[String, Int] = mutable.HashMap[String, Int]()
   def get(valveFrom: Valve, valveTo: Valve)(using graph: ValveGraph): Int =
@@ -70,17 +98,22 @@ class ValveGraph(val maze: Maze) extends Graph[Valve]:
       current.getElement.valveNames.contains(potentialNeighbour.getElement.name)
 
 case class Maze(valves: Seq[Valve]):
+  def openByName(valvesToOpen: List[String]): Maze = open(valvesToOpen.map(this.get(_)))
+  def open(valvesToOpen: List[Valve]): Maze =
+    Maze(
+      valves.map:
+        case value if valvesToOpen.contains(value) => value.copy(pressure = 0)
+        case value => value
+    )
   lazy val value = valves.map(_.pressure).sum
   def get(name: String): Valve = valves.find(_.name == name) match
     case Some(valve) => valve
     case None => throw Exception(s"Not supported for $name")
-  def openValve(valve: Valve): Maze =
-    Maze(
-      valves.map:
-        case value if value == valve => valve.copy(pressure = 0)
-        case value => value
-    )
-
+  def openValve(valve: Valve): Maze = open(List(valve))
+  lazy val canonical: String =
+    valves.sortBy(_.name).map: current =>
+      s"${current.name}${current.pressure}"
+    .mkString(".")
 case class Valve(name: String, pressure: Int, valveNames: Seq[String])
 
 case class PartialResultPart2(remainingSteps: (Int, Int), start: (String, String), maze: Maze, currentPressure: Int, openedValves: List[String])(using graph: ValveGraph) extends Ordered[PartialResultPart2]:
@@ -190,10 +223,10 @@ case class PartialResult(remainingSteps: Int, start: String, maze: Maze, current
 
 
 @tailrec
-def solveMaze(currentPResults: List[PartialResult], bestSolutionFound: Option[PartialResult])(using graph: ValveGraph): Int =
+def solveMaze(currentPResults: List[PartialResult], bestSolutionFound: Option[PartialResult])(using graph: ValveGraph): PartialResult =
   currentPResults match
     case Nil => bestSolutionFound match
-      case Some(value) => value.currentPressure
+      case Some(value) => value
       case None => throw Exception("Not Found")
     case head :: tail =>
       loggerAOCPart1.trace(s"IN --> ${head.simple}")
