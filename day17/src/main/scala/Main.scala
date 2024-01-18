@@ -23,34 +23,37 @@ export Move._
 
 object Solver:
   def runOn(inputLines: Seq[String]): (String, String) =
-    val result1 = s""
-    val result2 = s""
+    val (part1Query, part2Query) = (2022, 1000000000000l)
 
-    //val origin = Position(0,0)
-    //println(buildMovesRoundRobin(inputLines(0)).take(140).mkString("-"))
-    //println(buildRocksRoundRobin()(0).shape(origin))
-
-    //val chamber2 = Chamber(List(Shape(Position(10,2), Plus)))(7)
-    //println(s"${chamber2.asSentence}")
     val movesAsString = inputLines(0)
     val lengthOfWind = movesAsString.length
     val moves = buildMovesRoundRobin(movesAsString).iterator
-    val finalChamber = buildRocksRoundRobin().take(2022).foldLeft(Chamber(Nil)(7)):
+
+    val exploringDepth = math.max(movesAsString.length / 2.5, part1Query).toInt
+
+    val chambers = buildRocksRoundRobin().take(exploringDepth).scanLeft(Chamber(Nil)(7)):
       case (acc, newRock) => acc.dropRock(newRock, moves)
 
-    //println(finalChamber.zipWithIndex.filter(_._2%1000==0).map(_._1.highestPoint).sliding(2,1).map(current => current(1) - current(0)).mkString("-"))
-    println(finalChamber.highestPoint)
-    println(findCycle(finalChamber.asSentence.reverse, 5))
+    val result1 = chambers(part1Query).highestPoint
 
-    /*given Chamber = chamber2
-    val chamber3 = chamber2.addShape(Horizontal(0,2))
+    val repeatingPatternHighness = findCycle(chambers.last.asSentence.reverse, 2)._1
 
-    println(Horizontal(Position(0, 2)).canGoDown)
-    println(Horizontal(Position(1, 2)).canGoDown)
-    println(Horizontal(Position(1, 2)).canGoDown(using chamber3))
-    println(Horizontal(Position(1, 2)).canGoLeft)
-    println(Vertical(6, 0).canGoLeft)
-    println(Vertical(6, 0).canGoRight)*/
+    val numberOfRocksInBeforeRepeating = chambers.map(_.highestPoint).sliding(2, 1).map(current => current(1) - current(0)).zipWithIndex.foldLeft(List((0, 1))):
+      case (acc, (newHigh, index)) =>
+        newHigh match
+          case 0 => acc
+          case value => acc.head._1 + value > repeatingPatternHighness match
+            case true => (value, index + 1) +: acc
+            case false => (acc.head._1 + value, acc.head._2) +: acc.tail
+    .take(2).map(_._2).reduce(_ - _)
+
+    val repeatingHighness = chambers.map(_.highestPoint).take(numberOfRocksInBeforeRepeating - 1)
+
+    val part2 = part2Query / numberOfRocksInBeforeRepeating * repeatingPatternHighness + repeatingHighness((part2Query % numberOfRocksInBeforeRepeating).toInt)
+
+    val result2 = s"$part2"
+
+    //println(s"$repeatingPatternHighness and $numberOfRocksInBeforeRepeating")
 
     (s"${result1}", s"${result2}")
 
@@ -155,10 +158,10 @@ object Position:
 case class Shape(downLeftCorner: Position, rock: Rock):
   lazy val positions: List[Position] =
     rock match
-      case Horizontal => List(downLeftCorner.xUp(2).xRight(1), downLeftCorner.xUp(1), downLeftCorner.xUp(1).xRight(1), downLeftCorner.xUp(1).xRight(2), downLeftCorner.xRight(1))
+      case Horizontal => List(downLeftCorner, downLeftCorner.xRight(1), downLeftCorner.xRight(2), downLeftCorner.xRight(3))
       case Plus => List(downLeftCorner.xUp(2).xRight(1), downLeftCorner.xUp(1), downLeftCorner.xUp(1).xRight(1), downLeftCorner.xUp(1).xRight(2), downLeftCorner.xRight(1))
       case Corner => List(downLeftCorner.xUp(2).xRight(2), downLeftCorner.xUp(1).xRight(2), downLeftCorner, downLeftCorner.xRight(1), downLeftCorner.xRight(2))
-      case Vertical => List(downLeftCorner.xUp(2).xRight(2), downLeftCorner.xUp(1).xRight(2), downLeftCorner, downLeftCorner.xRight(1), downLeftCorner.xRight(2))
+      case Vertical => List(downLeftCorner.xUp(3), downLeftCorner.xUp(2), downLeftCorner.xUp(1), downLeftCorner)
       case Square => List(downLeftCorner.xUp(1), downLeftCorner, downLeftCorner.xUp(1).xRight(1), downLeftCorner.xRight(1))
   private final def canMove(direction: Position => Position)(using chamber: Chamber): Boolean = ! positions.map(direction).find(chamber.isFree(_) == false).isDefined
 
@@ -176,11 +179,11 @@ case class Shape(downLeftCorner: Position, rock: Rock):
   final def moveRight(using Chamber): Shape = moveIfPossible(Position.moveRight)
 
 
-def findCycle(toLookIn: String, factor: Int): Int =
+def findCycle(toLookIn: String, factor: Int): (Int, Int) =
   def search(toLookIn: String, current: Int, best: Int): Int =
     val (pattern, tail) = toLookIn.splitAt(current)
     tail.indexOf(pattern) match
-      case -1 => best
+      case -1 => 0
       case 0 => current
       case value => search(toLookIn, current + factor, current)
-  search(toLookIn, factor, 0)
+  (0 to (toLookIn.length) by 2).map(index => (search(toLookIn.drop(index), factor, 0), index * 2)).maxBy(_._1)
