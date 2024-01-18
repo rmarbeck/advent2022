@@ -1,4 +1,5 @@
 import Position.moveLeft
+import Rock.{Corner, Horizontal, Plus, Square, Vertical}
 
 import scala.io.Source
 import com.typesafe.scalalogging.Logger
@@ -29,15 +30,17 @@ object Solver:
     //println(buildMovesRoundRobin(inputLines(0)).take(140).mkString("-"))
     //println(buildRocksRoundRobin()(0).shape(origin))
 
-    //val chamber2 = Chamber(List(Plus(Position(10,2))))(7)
-    //println(s"${chamber2}")
+    //val chamber2 = Chamber(List(Shape(Position(10,2), Plus)))(7)
+    //println(s"${chamber2.asSentence}")
     val movesAsString = inputLines(0)
     val lengthOfWind = movesAsString.length
     val moves = buildMovesRoundRobin(movesAsString).iterator
-    val finalChamber = buildRocksRoundRobin().take(5000).scanLeft(Chamber(Nil)(7)):
+    val finalChamber = buildRocksRoundRobin().take(2022).foldLeft(Chamber(Nil)(7)):
       case (acc, newRock) => acc.dropRock(newRock, moves)
 
-    println(finalChamber.zipWithIndex.filter(_._2%1000==0).map(_._1.highestPoint).sliding(2,1).map(current => current(1) - current(0)).mkString("-"))
+    //println(finalChamber.zipWithIndex.filter(_._2%1000==0).map(_._1.highestPoint).sliding(2,1).map(current => current(1) - current(0)).mkString("-"))
+    println(finalChamber.highestPoint)
+    println(findCycle(finalChamber.asSentence.reverse, 5))
 
     /*given Chamber = chamber2
     val chamber3 = chamber2.addShape(Horizontal(0,2))
@@ -67,14 +70,8 @@ enum Move:
   case Left, Right
 
 enum Rock:
-  def shape(position: Position) =
-    this match
-      case HorizontalRock => Horizontal(position)
-      case PlusRock => Plus(position)
-      case CornerRock => Corner(position)
-      case VerticalRock => Vertical(position)
-      case SquareRock => Square(position)
-  case HorizontalRock, PlusRock, CornerRock, VerticalRock, SquareRock
+  def shape(position: Position) = Shape(position, this)
+  case Horizontal, Plus, Corner, Vertical, Square
 
 object Move:
   def from(char: Char): Move =
@@ -84,6 +81,18 @@ object Move:
       case _ => throw Exception("Not managed")
 
 case class Chamber(shapes: List[Shape])(width: Int = 7):
+  lazy val asSentence: String =
+    def lineToChar(values: Array[Boolean]): Array[Char] =
+      val List(char1, char2) = values.splitAt(4) match
+        case (start, end) => List(start, end).map(_.zipWithIndex.foldLeft(65):
+          case (acc, (value, index)) =>
+            val result = value match
+              case true => acc + (math.pow(2, index).toInt)
+              case false => acc
+            result
+        .toChar)
+      Array(char1, char2)
+    data.filterNot(_.count(_ == false) == 0).flatMap(lineToChar(_)).mkString
   def dropRock(newRock: Rock, moves: Iterator[Move]): Chamber =
     def findFinalPositionOfShape(shape: Shape): Shape =
       val currentMove = moves.next()
@@ -102,9 +111,9 @@ case class Chamber(shapes: List[Shape])(width: Int = 7):
 
   def addShape(newShape: Shape): Chamber = Chamber(newShape :: shapes)(width)
   def isFree(position: Position): Boolean =
-      data.isDefinedAt(position.row) && data(position.row).isDefinedAt(position.col) match
-          case true => data(position.row)(position.col)
-          case false => false
+    data.isDefinedAt(position.row) && data(position.row).isDefinedAt(position.col) match
+      case true => data(position.row)(position.col)
+      case false => false
   val highestPoint: Int =
     shapes.map(_.positions.map(_.row).max).maxOption match
       case Some(value) => value + 1
@@ -143,53 +152,35 @@ object Position:
   def moveLeft(position: Position): Position = position.copy(col = position.col - 1)
   def moveRight(position: Position): Position = position.copy(col = position.col + 1)
 
-sealed trait Shape:
-  def positions: List[Position]
-  protected def move(direction: Position => Position)(using Chamber): Shape
-  final def canMove(direction: Position => Position)(using chamber: Chamber): Boolean = ! positions.map(direction).find(chamber.isFree(_) == false).isDefined
+case class Shape(downLeftCorner: Position, rock: Rock):
+  lazy val positions: List[Position] =
+    rock match
+      case Horizontal => List(downLeftCorner.xUp(2).xRight(1), downLeftCorner.xUp(1), downLeftCorner.xUp(1).xRight(1), downLeftCorner.xUp(1).xRight(2), downLeftCorner.xRight(1))
+      case Plus => List(downLeftCorner.xUp(2).xRight(1), downLeftCorner.xUp(1), downLeftCorner.xUp(1).xRight(1), downLeftCorner.xUp(1).xRight(2), downLeftCorner.xRight(1))
+      case Corner => List(downLeftCorner.xUp(2).xRight(2), downLeftCorner.xUp(1).xRight(2), downLeftCorner, downLeftCorner.xRight(1), downLeftCorner.xRight(2))
+      case Vertical => List(downLeftCorner.xUp(2).xRight(2), downLeftCorner.xUp(1).xRight(2), downLeftCorner, downLeftCorner.xRight(1), downLeftCorner.xRight(2))
+      case Square => List(downLeftCorner.xUp(1), downLeftCorner, downLeftCorner.xUp(1).xRight(1), downLeftCorner.xRight(1))
+  private final def canMove(direction: Position => Position)(using chamber: Chamber): Boolean = ! positions.map(direction).find(chamber.isFree(_) == false).isDefined
+
   final def canGoDown(using Chamber): Boolean = canMove(Position.moveDown)
   final def canGoLeft(using Chamber): Boolean = canMove(Position.moveLeft)
   final def canGoRight(using Chamber): Boolean = canMove(Position.moveRight)
-  final def doMove(direction: Position => Position)(using chamber: Chamber) =
+
+  private final def moveIfPossible(direction: Position => Position)(using chamber: Chamber) =
     canMove(direction) match
-      case true => move(direction)
+      case true => this.copy(downLeftCorner = direction.apply(downLeftCorner))
       case false => this
-  final def moveDown(using Chamber): Shape = doMove(Position.moveDown)
-  final def moveLeft(using Chamber): Shape = doMove(Position.moveLeft)
-  final def moveRight(using Chamber): Shape = doMove(Position.moveRight)
 
-case class Horizontal(position: Position) extends Shape:
-  override def positions = List(position, position.xRight(1), position.xRight(2), position.xRight(3))
-  override def move(direction: Position => Position)(using Chamber): Shape = Horizontal(direction(position))
+  final def moveDown(using Chamber): Shape = moveIfPossible(Position.moveDown)
+  final def moveLeft(using Chamber): Shape = moveIfPossible(Position.moveLeft)
+  final def moveRight(using Chamber): Shape = moveIfPossible(Position.moveRight)
 
-object Horizontal:
-  def apply(row: Int, col: Int) = new Horizontal(Position(row, col))
 
-case class Plus(position: Position) extends Shape:
-  override def positions = List(position.xUp(2).xRight(1), position.xUp(1), position.xUp(1).xRight(1), position.xUp(1).xRight(2), position.xRight(1))
-  override def move(direction: Position => Position)(using Chamber): Shape = Plus(direction(position))
-
-object Plus:
-  def apply(row: Int, col: Int) = new Plus(Position(row, col))
-
-case class Corner(position: Position) extends Shape:
-  override def positions = List(position.xUp(2).xRight(2), position.xUp(1).xRight(2), position, position.xRight(1), position.xRight(2))
-  override def move(direction: Position => Position)(using Chamber): Shape = Corner(direction(position))
-
-object Corner:
-  def apply(row: Int, col: Int) = new Corner(Position(row, col))
-
-case class Vertical(position: Position) extends Shape:
-  override def positions = List(position.xUp(3), position.xUp(2), position.xUp(1), position)
-  override def move(direction: Position => Position)(using Chamber): Shape = Vertical(direction(position))
-
-object Vertical:
-  def apply(row: Int, col: Int) = new Vertical(Position(row, col))
-
-case class Square(position: Position) extends Shape:
-  def this(row: Int, col: Int) = this(Position(row, col))
-  override def positions = List(position.xUp(1), position, position.xUp(1).xRight(1), position.xRight(1))
-  override def move(direction: Position => Position)(using Chamber): Shape = Square(direction(position))
-
-object Square:
-  def apply(row: Int, col: Int) = new Square(Position(row, col))
+def findCycle(toLookIn: String, factor: Int): Int =
+  def search(toLookIn: String, current: Int, best: Int): Int =
+    val (pattern, tail) = toLookIn.splitAt(current)
+    tail.indexOf(pattern) match
+      case -1 => best
+      case 0 => current
+      case value => search(toLookIn, current + factor, current)
+  search(toLookIn, factor, 0)
