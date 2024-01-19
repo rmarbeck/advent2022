@@ -1,6 +1,8 @@
 import scala.io.Source
 import com.typesafe.scalalogging.Logger
-import scala.collection.parallel.CollectionConverters._
+
+import scala.annotation.tailrec
+import scala.collection.parallel.CollectionConverters.*
 
 
 val loggerAOC = Logger("aoc")
@@ -21,31 +23,32 @@ val loggerAOCPart2 = Logger("aoc.part2")
 object Solver:
   def runOn(inputLines: Seq[String]): (String, String) =
 
-    val cubes = inputLines.map:
+    val dropletBorders = inputLines.map:
       case s"$x,$y,$z" => Cube(x.toInt, y.toInt, z.toInt)
 
-    val resultPart1 = cubes.par.map(currentCube => 6 - cubes.filterNot(_ == currentCube).count(_.touches(currentCube))).sum
+    val resultPart1 = dropletBorders.par.map(currentCube => 6 - dropletBorders.filterNot(_ == currentCube).count(_.touches(currentCube))).sum
 
-    val (minX, maxX) = cubes.map(_.x).sorted.splitAt(1) match
-      case (list1, list2) => (list1.head, list2.last)
-    val (minY, maxY) = cubes.map(_.y).sorted.splitAt(1) match
-      case (list1, list2) => (list1.head, list2.last)
-    val (minZ, maxZ) = cubes.map(_.z).sorted.splitAt(1) match
-      case (list1, list2) => (list1.head, list2.last)
+    def rangeOn(onCoord: Cube => Int): Range =
+      val (min, max) = dropletBorders.map(onCoord).sorted.splitAt(1) match
+        case (list1, list2) => (list1.head, list2.last)
+      min to max
 
-    val cubes2 =
-      for x <- minX + 1 until maxX
-        y <- minY + 1 until maxY
-        z <- minZ + 1 until maxZ
-        if Cube(x, y, z).isSurrounded(cubes.toList)
+    val (cubesPotentiallyInternal, cubesOut) =
+      (for x <- rangeOn(_.x)
+        y <- rangeOn(_.y)
+        z <- rangeOn(_.z)
+        if (! dropletBorders.contains(Cube(x, y, z)))
       yield
-        Cube(x, y, z)
+        (Cube(x, y, z), Cube(x, y, z).isSurrounded(dropletBorders.toList))
+        ).partition(_._2 == true) match
+          case (first, second) => (first.map(_._1).toList, second.map(_._1).toList)
 
-    //println(cubes2.length)
-    val extendedCubes = cubes ++: cubes2
-    //println(extendedCubes.length)
 
-    val resultPart2 = cubes.par.map(currentCube => 6 - extendedCubes.filterNot(_ == currentCube).count(_.touches(currentCube))).sum
+    val insideDroplet = getInternalCubes(cubesPotentiallyInternal, cubesOut)
+
+    val dropletBordersAndInside = dropletBorders ++: insideDroplet
+
+    val resultPart2 = dropletBorders.par.map(currentCube => 6 - dropletBordersAndInside.filterNot(_ == currentCube).count(_.touches(currentCube))).sum
 
     val result1 = s"$resultPart1"
     val result2 = s"$resultPart2"
@@ -87,3 +90,15 @@ case class Cube(x: Int, y: Int, z: Int):
       case false => isSurroundedOnAxe(X) && isSurroundedOnAxe(Y) && isSurroundedOnAxe(Z)
 
   def touches(other: Cube): Boolean = this.coords.zip(other.coords).map(value => math.abs(value._1 - value._2)).sum == 1
+
+@tailrec
+def getInternalCubes(candidates: List[Cube], externals: List[Cube], internals: List[List[Cube]] = Nil): List[Cube] =
+  candidates match
+    case Nil => internals.flatten
+    case head :: tail =>
+      val (connected, unconnected) = internals.partition(currentList => currentList.exists(_.touches(head)))
+      val merged = connected.foldLeft(head :: Nil):
+        case (acc, newList) => acc ::: newList
+      externals.exists(_.touches(head)) match
+        case true => getInternalCubes(tail, externals ::: merged, unconnected)
+        case false => getInternalCubes(tail, externals, merged :: unconnected)
