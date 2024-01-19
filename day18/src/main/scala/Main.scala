@@ -70,6 +70,7 @@ enum Axe:
 export Axe._
 
 case class Cube(x: Int, y: Int, z: Int):
+  def coords: List[Int] = List(x, y, z)
   def isSurrounded(others: List[Cube]): Boolean =
     def isSurroundedOnAxe(axe: Axe): Boolean =
       def test(filters: List[Cube => Int], extractor: Cube => Int) =
@@ -85,8 +86,4 @@ case class Cube(x: Int, y: Int, z: Int):
       case true => false
       case false => isSurroundedOnAxe(X) && isSurroundedOnAxe(Y) && isSurroundedOnAxe(Z)
 
-  def touches(other: Cube): Boolean =
-    val diff = other match
-        case Cube(oX, oY, oZ) => List(x, y, z, oX, oY, oZ).splitAt(3) match
-          case (thisCoords, otherCoords) => thisCoords.zip(otherCoords).map(value => math.abs(value._1 - value._2)).sum
-    diff == 1
+  def touches(other: Cube): Boolean = this.coords.zip(other.coords).map(value => math.abs(value._1 - value._2)).sum == 1
