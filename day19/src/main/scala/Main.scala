@@ -26,14 +26,12 @@ object Solver:
         case List(id, oreRobot, clayRobot, obsidianRobotOre, obsidianRobotClay, geodeRobotOre, geodeRobotObsidian) => BluePrint(id, OreRobotCost(oreRobot), ClayRobotCost(clayRobot), ObsidianRobotCost(obsidianRobotOre, obsidianRobotClay), GeodeRobotCost(geodeRobotOre, geodeRobotObsidian))
         case _ => throw Exception("Not supported")
 
-    //blueprints.par.foreach(current => println(s" =>  ${current.id * current.collectingPotential(24)}"))
-    val result = blueprints.par.map(current => current.id * current.collectingPotential(24)).sum
+    val resultPart1 = blueprints.par.map(current => current.id * current.collectingPotential(24)).sum
 
-    println(s"$result")
+    val resultPart2 = blueprints.take(3).par.map(current => current.collectingPotential(32)).product
 
-
-    val result1 = s""
-    val result2 = s""
+    val result1 = s"$resultPart1"
+    val result2 = s"$resultPart2"
 
     (s"${result1}", s"${result2}")
 
@@ -53,7 +51,8 @@ sealed trait RobotCost
 
 case class OreRobotCost(ore: Int) extends RobotCost
 case class ClayRobotCost(ore: Int) extends RobotCost
-case class ObsidianRobotCost(ore: Int, clay: Int) extends RobotCost
+case class ObsidianRobotCost(ore: Int, clay: Int) extends RobotCost:
+  def from(resources: Resources): Int = math.min(resources.ore/ore, resources.clay/clay)
 case class GeodeRobotCost(ore: Int, obsidian: Int) extends RobotCost
 
 case class Resources(ore: Int, clay: Int, obsidian: Int, geode: Int):
@@ -77,22 +76,13 @@ object Resources:
   def empty = Resources(0, 0 ,0 ,0)
 
 case class MachineInventory(oreRobots: Int, clayRobots: Int, obsidianRobots: Int, geodeRobots: Int):
-  def generate: Resources = Resources(oreRobots, clayRobots, obsidianRobots, geodeRobots)
-  def addOre =
-    loggerAOCPart1.trace("adding oreRobot")
-    this.copy(oreRobots = oreRobots + 1)
-
-  def addClay =
-    loggerAOCPart1.trace("adding clayRobot")
-    this.copy(clayRobots = clayRobots + 1)
-
-  def addObsidian =
-    loggerAOCPart1.trace("adding obsidianRobot")
-    this.copy(obsidianRobots = obsidianRobots + 1)
-
-  def addGeode =
-    loggerAOCPart1.trace("adding geodeRobot")
-    this.copy(geodeRobots = geodeRobots + 1)
+  def numberOfMachines = oreRobots + clayRobots + obsidianRobots + geodeRobots
+  def generate: Resources = iterate(1)
+  def iterate(nTimes: Int): Resources = Resources(oreRobots*nTimes, clayRobots*nTimes, obsidianRobots*nTimes, geodeRobots*nTimes)
+  def addOre = this.copy(oreRobots = oreRobots + 1)
+  def addClay = this.copy(clayRobots = clayRobots + 1)
+  def addObsidian = this.copy(obsidianRobots = obsidianRobots + 1)
+  def addGeode = this.copy(geodeRobots = geodeRobots + 1)
 
 object MachineInventory:
   def start = MachineInventory(1, 0 ,0 ,0)
@@ -103,24 +93,13 @@ enum ToDo:
 export ToDo._
 
 case class BluePrint(id: Int, oreCost: OreRobotCost, clayCost: ClayRobotCost, obsidianCost: ObsidianRobotCost, geodeCost: GeodeRobotCost):
-  def decide(resources: Resources, machines: MachineInventory): ToDo =
-    val obsidian = geodeCost.obsidian
-    val clay = obsidianCost.clay
-    val ore = geodeCost.ore + obsidianCost.ore + clayCost.ore + oreCost.ore
-    loggerAOCPart1.trace(s"ratios = $obsidian, $clay, $ore")
-    loggerAOCPart1.trace(s"${machines.clayRobots/machines.oreRobots}, ${clay/ore}")
-    val result = machines.clayRobots / machines.oreRobots <= clay / ore match
-      case true => AddClayRobot
-      case false => machines.obsidianRobots/machines.oreRobots <= obsidian/ore match
-        case true => AddObsidianRobot
-        case false => machines.geodeRobots/machines.oreRobots <= 1 match
-          case true => AddGeodeRobot
-          case false => AddOreRobot
-    println(s"$result")
-    result
-  def canBuild(resources: Resources, robotCost: RobotCost): Boolean = resources.isEnough(robotCost)
+  lazy val obsidianNeed = geodeCost.obsidian
+  lazy val clayNeed = obsidianCost.clay
+  lazy val oreNeed = geodeCost.ore + obsidianCost.ore + clayCost.ore + oreCost.ore
 
-  case class PartialResult(remainingMinutes: Int, resources: Resources, machines: MachineInventory)
+  private def canBuild(resources: Resources, robotCost: RobotCost): Boolean = resources.isEnough(robotCost)
+
+  private case class PartialResult(remainingMinutes: Int, resources: Resources, machines: MachineInventory)
 
   @tailrec
   private def computeRec(results: List[PartialResult], best: Int = 0): Int =
@@ -128,44 +107,40 @@ case class BluePrint(id: Int, oreCost: OreRobotCost, clayCost: ClayRobotCost, ob
       case Nil => best
       case head :: tail =>
         head.remainingMinutes match
-          case 0 =>
-            //if (head.resources.geode > best) then println(s"${head.resources.geode}")
-            computeRec(tail, math.max(best, head.resources.geode))
+          case 0 => computeRec(tail, math.max(best, head.resources.geode))
           case _ =>
-            val (remainingMinutes, resources, machines) = (head.remainingMinutes, head.resources, head.machines)
-            val production = machines.generate
+            val (remainingMinutes, resources, machines, production) = (head.remainingMinutes, head.resources, head.machines, head.machines.generate)
             canBuild(resources, geodeCost) match
               case true => computeRec(PartialResult(remainingMinutes - 1, resources + production - geodeCost, machines.addGeode) :: tail, best)
               case false =>
                 canBuild(resources, obsidianCost) match
                   case true => computeRec(PartialResult(remainingMinutes - 1, resources + production - obsidianCost, machines.addObsidian) :: tail, best)
                   case false =>
-                    var alternatives: List[PartialResult] = List(PartialResult(remainingMinutes - 1, resources + production, machines))
-                    if canBuild(resources, clayCost) then alternatives = alternatives :+ PartialResult(remainingMinutes - 1, resources + production - clayCost, machines.addClay)
-                    if canBuild(resources, oreCost) then alternatives = alternatives :+ PartialResult(remainingMinutes - 1, resources + production - oreCost, machines.addOre)
+                    @tailrec
+                    def timeToObsidian(remainingMinutes: Int, resources: Resources, machines: MachineInventory, score: Int = 0): Int =
+                      remainingMinutes match
+                        case 0 => Int.MaxValue
+                        case _ => canBuild(resources, obsidianCost) match
+                          case true => score
+                          case false => timeToObsidian(remainingMinutes - 1, resources + machines.generate, machines, score + 1)
+
+                    lazy val timeToObsidianWithNewClay = timeToObsidian(remainingMinutes - 1, resources + production - clayCost, machines.addClay)
+                    lazy val timeToObsidianWithNewOre = timeToObsidian(remainingMinutes - 1, resources + production - oreCost, machines.addOre)
+                    lazy val timeToObsidianWithNothing = timeToObsidian(remainingMinutes - 1, resources + production, machines)
+
+                    def needMoreClayRobots: Boolean = timeToObsidianWithNewClay <= timeToObsidianWithNewOre
+                    def needMoreOreRobots: Boolean = timeToObsidianWithNewOre <= timeToObsidianWithNothing
+                    def shouldBuildClay: Boolean = canBuild(resources, clayCost) && needMoreClayRobots
+                    def shouldBuildOre: Boolean = (oreCost.ore < remainingMinutes) && canBuild(resources, oreCost) && needMoreOreRobots
+
+                    def shouldBuildNothing: Boolean = !shouldBuildOre
+
+                    val noBuild = PartialResult(remainingMinutes - 1, resources + production, machines)
+                    val buildClay = PartialResult(remainingMinutes - 1, resources + production - clayCost, machines.addClay)
+                    val buildOre = PartialResult(remainingMinutes - 1, resources + production - oreCost, machines.addOre)
+
+                    val tests = List(shouldBuildClay, shouldBuildOre, shouldBuildNothing)
+                    val alternatives: List[PartialResult] = List(buildClay, buildOre, noBuild).zip(tests).filter(_._2).map(_._1)
                     computeRec(alternatives ::: tail, best)
-
-
-  def compute(remainingMinutes: Int, resources: Resources, machines: MachineInventory): Int =
-    remainingMinutes match
-      case 0 => resources.geode
-      case _ =>
-        val production = machines.generate
-        println(s"[${24-remainingMinutes+1}] $machines <-> $resources")
-        val (robotCost, toDo) = canBuild(resources, geodeCost) match
-          case true => (Some(geodeCost), Some(AddGeodeRobot))
-          case false => decide(resources, machines) match
-            case AddOreRobot if canBuild(resources, oreCost) => (Some(oreCost), Some(AddOreRobot))
-            case AddClayRobot if canBuild(resources, clayCost) => (Some(clayCost), Some(AddClayRobot))
-            case AddObsidianRobot if canBuild(resources, obsidianCost) => (Some(obsidianCost), Some(AddObsidianRobot))
-            case _ => (None, None)
-        val newResources = robotCost.map(resources - _).getOrElse(resources) + production
-        val newMachineInventory = toDo.map:
-          case AddOreRobot => machines.addOre
-          case AddClayRobot => machines.addClay
-          case AddObsidianRobot => machines.addObsidian
-          case AddGeodeRobot => machines.addGeode
-        .getOrElse(machines)
-        compute(remainingMinutes - 1, newResources, newMachineInventory)
 
   def collectingPotential(minutes: Int): Int = computeRec(List(PartialResult(minutes, Resources.empty, MachineInventory.start)))
