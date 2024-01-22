@@ -22,6 +22,8 @@ val loggerAOCPart2 = Logger("aoc.part2")
 object Solver:
   def runOn(inputLines: Seq[String]): (String, String) =
 
+    val (root, specialMonkey) = ("root", "humn")
+
     val monkeys = inputLines.map:
       case s"$name: $first $operator $second" => OperationMonkey(name, MathOperation(first, second, Operator.from(operator)))
       case s"$name: $value" => SpecificNumberMonkey(name, value.toInt)
@@ -29,40 +31,14 @@ object Solver:
     val jungle = Jungle(monkeys)
     given Jungle = jungle
 
-    val (firstMonkey, secondMonkey) = jungle.getMonkey("root") match
+    val (firstMonkey, secondMonkey) = jungle.getMonkey(root) match
       case OperationMonkey(_, MathOperation(first, second, _)) => (first, second)
       case _ => throw Exception("Not supported")
 
     @tailrec
-    def test(value: Int, firstMonkey: String, secondMonkey: String): Int =
-      given newJungle: Jungle = jungle.update("humn", value)
-      val (firstValue, secondValue) = (newJungle.getMonkey(firstMonkey).yell, newJungle.getMonkey(secondMonkey).yell)
-      firstValue == secondValue match
-        case true => value
-        case false =>
-          if (value%10000 == -1)
-            println(s"$value => $firstValue != $secondValue")
-          test(value - 1, firstMonkey, secondMonkey)
-
-    @tailrec
-    def test2(value: Long, firstMonkey: String, target: Long): Long =
-      val newJunglePlus: Jungle = jungle.update("humn", value)
-      val newJungleMinus: Jungle = jungle.update("humn", -value)
-      val firstValuePlus = newJunglePlus.getMonkey(firstMonkey).yell(using newJunglePlus)
-      val firstValueMinus = newJungleMinus.getMonkey(firstMonkey).yell(using newJungleMinus)
-      firstValuePlus == target match
-        case true => value
-        case false => firstValueMinus == target match
-          case true => -value
-          case false =>
-            println(s"[$value] - $firstValueMinus vs $target")
-            test2(value + 100, firstMonkey, target)
-
-
-    @tailrec
     def dichotomy(value: Long, step: Long, firstMonkey: Monkey, target: Long): Long =
-      val firstValue = firstMonkey.yell(using jungle.update("humn", value))
-      val firstValuePlusStep = firstMonkey.yell(using jungle.update("humn", value+step))
+      val firstValue = firstMonkey.yell(using jungle.update(specialMonkey, value))
+      val firstValuePlusStep = firstMonkey.yell(using jungle.update(specialMonkey, value+step))
       step match
         case 0 => println("approximate"); value
         case _ =>
@@ -82,32 +58,22 @@ object Solver:
       val rawResult = dichotomy(value, step, firstMonkey, target)
       def lazyList(index: Long): LazyList[Long] = (rawResult - index) #:: lazyList(index + 1l)
       lazyList(1l).find:
-        case currentValue => firstMonkey.yell(using jungle.update("humn", currentValue)) != target
+        case currentValue => firstMonkey.yell(using jungle.update(specialMonkey, currentValue)) != target
       .map(_ + 1).getOrElse(rawResult)
 
     //second monkey does not depend on humn value
     val target = jungle.getMonkey(secondMonkey).yell
     val (startValue, unsignedStep) = (0, 100000)
-    val valueAtStart = jungle.getMonkey(firstMonkey).yell(using jungle.update("humn", startValue))
+    val valueAtStart = jungle.getMonkey(firstMonkey).yell(using jungle.update(specialMonkey, startValue))
 
+    //should test monotony to be sure
     val stepToUse = valueAtStart < target match
         case true => unsignedStep
         case _ => -unsignedStep
 
-
     val resultPart2 = lowestSolution(startValue, stepToUse, jungle.getMonkey(firstMonkey), target)
-    /*val newJungle: Jungle = jungle.update("humn", 3099532691303l)
 
-    ///val resultPart2 = newJungle.getMonkey(firstMonkey).describe(using newJungle)//test(0, firstMonkey, secondMonkey)
-
-
-    println(s"First Monkey :  ${newJungle.getMonkey(firstMonkey).yell(using newJungle)}")
-    println(s"Second Monkey :  ${newJungle.getMonkey(secondMonkey).yell(using newJungle)}")
-    println(s"humn Monkey : ${newJungle.getMonkey("humn").yell(using newJungle)}")*/
-
-    //val resultPart2 =""
-
-    val result1 = s"${jungle.getMonkey("root").yell}"
+    val result1 = s"${jungle.getMonkey(root).yell}"
     val result2 = s"$resultPart2"
 
     (s"${result1}", s"${result2}")
@@ -145,7 +111,7 @@ object Operator:
 export Operator._
 
 case class Jungle(monkeys: Seq[Monkey]):
-  val monkeysMap = mutable.HashMap[String, Monkey]()
+  private val monkeysMap = mutable.HashMap[String, Monkey]()
   monkeys.foreach:
     case monkey: Monkey => monkeysMap.put(monkey.name, monkey)
   def getMonkey(name: String): Monkey = monkeysMap.get(name).get
