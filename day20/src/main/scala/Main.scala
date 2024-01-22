@@ -19,24 +19,24 @@ val loggerAOCPart2 = Logger("aoc.part2")
   println("Done")
 
 object Solver:
+  val (startOfScoreIndex, endOfScoreIndex, scoreIndexIncrement) = (1000, 3000, 1000)
+  val (part2MultiplyBy, part2Rounds) = (811589153, 10)
+  def mix(indexesOrdered: IndexesOrdered, initialNumbers: Seq[Long]) =
+    initialNumbers.zipWithIndex.foldLeft(indexesOrdered):
+      case (acc, (newValue, index)) => acc.move(index, newValue)
+
+  def extractScore(indexOfZero: Int, sizeOfArray: Int, initialNumbers: Seq[Long], result: IndexesOrdered) = (startOfScoreIndex to endOfScoreIndex by scoreIndexIncrement).map { current =>
+    val indexToLookIn = (current + indexOfZero) % sizeOfArray
+    val intermediateResult = result.applyTo(initialNumbers)((current + indexOfZero) % sizeOfArray)
+    loggerAOC.trace(s"Looking at $indexToLookIn => $intermediateResult")
+    intermediateResult
+  }.sum
+  
   def runOn(inputLines: Seq[String]): (String, String) =
     val numbers = inputLines.map(_.toLong)
-
     val sizeOfArray = numbers.length
-    val initialArray = numbers.toArray
 
     val initialIndex = IndexesOrdered((0 until sizeOfArray).toList)
-
-    def mix(indexesOrdered: IndexesOrdered, initialNumbers: Seq[Long]) =
-      initialNumbers.zipWithIndex.foldLeft(indexesOrdered):
-        case (acc, (newValue, index)) => acc.move(index, newValue)
-
-    def extractScore(indexOfZero: Int, sizeOfArray: Int, initialNumbers: Seq[Long], result: IndexesOrdered) = (1000 to 3000 by 1000).map { current =>
-      val indexToLookIn = (current + indexOfZero) % sizeOfArray
-      val intermediateResult = result.applyTo(initialNumbers)((current + indexOfZero) % sizeOfArray)
-      loggerAOC.trace(s"Looking at $indexToLookIn => $intermediateResult")
-      intermediateResult
-    }.sum
 
     val resultPart1Int = mix(initialIndex, numbers)
     val indexOfZeroPart1 = resultPart1Int.applyTo(numbers).indexOf(0)
@@ -44,9 +44,10 @@ object Solver:
     loggerAOCPart1.trace(s"zero is at position $indexOfZeroPart1")
     val resultPart1 = extractScore(indexOfZeroPart1, sizeOfArray, numbers, resultPart1Int)
 
-    val numbersPart2 = numbers.map(_*811589153)
+    
+    val numbersPart2 = numbers.map(_*part2MultiplyBy)
 
-    val resultPart2Int = (1 to 10).foldLeft(initialIndex):
+    val resultPart2Int = (1 to part2Rounds).foldLeft(initialIndex):
       case (acc, newResult) => mix(acc, numbersPart2)
     val indexOfZeroPart2 = resultPart2Int.applyTo(numbersPart2).indexOf(0)
 
