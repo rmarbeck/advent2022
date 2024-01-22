@@ -20,21 +20,22 @@ val loggerAOCPart2 = Logger("aoc.part2")
 
 object Solver:
   def runOn(inputLines: Seq[String]): (String, String) =
-
     val numbers = inputLines.map(_.toLong)
 
     val sizeOfArray = numbers.length
     val initialArray = numbers.toArray
 
-    val initialIndex = IndexesOrdered((0 until sizeOfArray).map(_.toLong).toList)
+    val initialIndex = IndexesOrdered((0 until sizeOfArray).toList)
 
     def mix(indexesOrdered: IndexesOrdered, initialNumbers: Seq[Long]) =
       initialNumbers.zipWithIndex.foldLeft(indexesOrdered):
         case (acc, (newValue, index)) => acc.move(index, newValue)
 
     def extractScore(indexOfZero: Int, sizeOfArray: Int, initialNumbers: Seq[Long], result: IndexesOrdered) = (1000 to 3000 by 1000).map { current =>
-      loggerAOC.trace(s"Looking at ${(current + indexOfZero) % sizeOfArray} => ${result.applyTo(initialNumbers)((current + indexOfZero) % sizeOfArray)}")
-      result.applyTo(initialNumbers)((current + indexOfZero) % sizeOfArray)
+      val indexToLookIn = (current + indexOfZero) % sizeOfArray
+      val intermediateResult = result.applyTo(initialNumbers)((current + indexOfZero) % sizeOfArray)
+      loggerAOC.trace(s"Looking at $indexToLookIn => $intermediateResult")
+      intermediateResult
     }.sum
 
     val resultPart1Int = mix(initialIndex, numbers)
@@ -42,7 +43,6 @@ object Solver:
 
     loggerAOCPart1.trace(s"zero is at position $indexOfZeroPart1")
     val resultPart1 = extractScore(indexOfZeroPart1, sizeOfArray, numbers, resultPart1Int)
-    loggerAOCPart1.trace(s"$resultPart1")
 
     val numbersPart2 = numbers.map(_*811589153)
 
@@ -52,7 +52,6 @@ object Solver:
 
     loggerAOCPart2.trace(s"zero is at position $indexOfZeroPart2")
     val resultPart2 = extractScore(indexOfZeroPart2, sizeOfArray, numbersPart2, resultPart2Int)
-    loggerAOCPart2.trace(s"$resultPart2")
 
     val result1 = s"$resultPart1"
     val result2 = s"$resultPart2"
@@ -71,7 +70,7 @@ object Solver:
       case _ => runOn(lines)
 end Solver
 
-case class IndexesOrdered(values: Seq[Long]):
+case class IndexesOrdered(values: Seq[Int]):
   val asArray = values.toArray
   val length = asArray.length
 
@@ -94,4 +93,4 @@ case class IndexesOrdered(values: Seq[Long]):
 
         moveInternally(indexOfValueToMove, newPosition)
 
-  def applyTo(data: Seq[Long]): Seq[Long] = values.map(value => data(value.toInt))
+  def applyTo(data: Seq[Long]): Seq[Long] = values.map(value => data(value))
