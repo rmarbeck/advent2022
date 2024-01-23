@@ -25,7 +25,11 @@ object Solver:
 
     val playground = Playground(playgroundInput)
 
+    println(s"Playgrround : height = ${playground.height}, width = ${playground.width}")
+
     val path = Path(pathInput.last)
+
+    println(playground)
 
     def move(status: Status, nextMove: (Int, Turn))(using playground: Playground): Status =
       def next(position: Position, direction: Direction, maxSteps: Int): Position =
@@ -47,7 +51,20 @@ object Solver:
     println(start)
     given Playground = playground
     val end = path.moves.foldLeft(start):
-      case (acc, newMove) => move(acc, newMove)
+      case (acc, newMove) =>
+        val result = move(acc, newMove)
+        //println(s"$newMove => $result")
+        result
+
+
+    assert(Down.turn(Clockwise) == Left)
+    assert(Down.turn(CounterClockwise) == Right)
+    assert(Up.turn(Clockwise) == Right)
+    assert(Up.turn(CounterClockwise) == Left)
+    assert(Left.turn(Clockwise) == Up)
+    assert(Left.turn(CounterClockwise) == Down)
+    assert(Right.turn(Clockwise) == Down)
+    assert(Right.turn(CounterClockwise) == Up)
 
 
     /*println(end)
@@ -124,22 +141,22 @@ case class Status(position: Position, direction: Direction):
   lazy val score = (position.row + 1) * 1000 + 4 * (position.col + 1) + direction.ordinal
 
 case class Playground(private val input: Seq[String]):
-  def walls = for row <- 0 until length
+  def walls = for row <- 0 until height
                   col <- 0 until width
                   if data(row)(col) == SolidWall
               do
                 println(s"Wall on $row $col")
 
   val width = input.map(_.length).max
-  val length = input.size
-  val data = Array.fill(length, width)(Empty)
+  val height = input.size
+  val data = Array.fill(height, width)(Empty)
   def isDefined(position: Position) = data.isDefinedAt(position.row) && data(position.row).isDefinedAt(position.col) && data(position.row)(position.col) != Empty
   def isWall(position: Position) = isDefined(position) && data(position.row)(position.col) == SolidWall
   def jumpToNext(undefinedPosition: Position, fromPosition: Position): Position =
     def findMostRightOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).last)
     def findMostLeftOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).head)
-    def findMostDownOnCol(col: Int) = Position( (0 until length).filter(data(_)(col) != Empty).last, col)
-    def findMostUpOnCol(col: Int) = Position((0 until length).filter(data(_)(col) != Empty).head, col)
+    def findMostDownOnCol(col: Int) = Position( (0 until height).filter(data(_)(col) != Empty).last, col)
+    def findMostUpOnCol(col: Int) = Position((0 until height).filter(data(_)(col) != Empty).head, col)
     undefinedPosition.row - fromPosition.row match
       case 0 => undefinedPosition.col - fromPosition.col match
         case diffOnCOl if diffOnCOl < 0 => findMostRightOnRow(fromPosition.row)
@@ -167,6 +184,7 @@ case class Playground(private val input: Seq[String]):
             case false => nextFree(newPotentialPosition, walkThrough, maxSteps - 1)
           case false =>
             val jumpedPosition = jumpToNext(newPotentialPosition, fromPosition)
+            //println(s"Jumped from $fromPosition to $jumpedPosition because of $newPotentialPosition")
             isWall(jumpedPosition) match
               case true => fromPosition
               case false => nextFree(jumpedPosition, walkThrough, maxSteps - 1)
