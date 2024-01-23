@@ -23,6 +23,8 @@ object Solver:
 
     val (playgroundInput, pathInput) = inputLines.span(!_.isEmpty)
 
+    Holder.empty
+
     val playground = Playground(playgroundInput)
 
     println(s"Playgrround : height = ${playground.height}, width = ${playground.width}")
@@ -39,7 +41,7 @@ object Solver:
           case Left => goLeft
           case Up => goUp
           case Down => goDown
-        playground.nextFree(position, toGo, maxSteps)
+        playground.nextFree(position, toGo, maxSteps, direction)
 
       val Status(currentPosition, currentDirection) = status
       val (maxSteps, turn) = nextMove
@@ -56,19 +58,10 @@ object Solver:
         //println(s"$newMove => $result")
         result
 
+    playground.printPath
 
-    assert(Down.turn(Clockwise) == Left)
-    assert(Down.turn(CounterClockwise) == Right)
-    assert(Up.turn(Clockwise) == Right)
-    assert(Up.turn(CounterClockwise) == Left)
-    assert(Left.turn(Clockwise) == Up)
-    assert(Left.turn(CounterClockwise) == Down)
-    assert(Right.turn(Clockwise) == Down)
-    assert(Right.turn(CounterClockwise) == Up)
-
-
-    /*println(end)
-    println(end.score)
+    println(s" END is $end")
+    /*println(end.score)
     println(path)*/
 
     val result1 = s"${end.score}"
@@ -125,7 +118,10 @@ case class Path(private val input: String):
   private val steps: List[Int] = input.split(Turn.keys).map(_.toInt).toList
   private val turns: List[Turn] = input.filter(Turn.keys.contains(_)).map(Turn.from(_)).toList
 
-  lazy val moves = steps.zip(turns)
+  private val tunedForLastMoveSteps = steps :+ 0
+  private val tunedForLastMoveTurns = turns ::: List(Clockwise, CounterClockwise)
+
+  lazy val moves = tunedForLastMoveSteps.zip(tunedForLastMoveTurns)
 
   override def toString: String = s"$moves"
 
@@ -141,12 +137,6 @@ case class Status(position: Position, direction: Direction):
   lazy val score = (position.row + 1) * 1000 + 4 * (position.col + 1) + direction.ordinal
 
 case class Playground(private val input: Seq[String]):
-  def walls = for row <- 0 until height
-                  col <- 0 until width
-                  if data(row)(col) == SolidWall
-              do
-                println(s"Wall on $row $col")
-
   val width = input.map(_.length).max
   val height = input.size
   val data = Array.fill(height, width)(Empty)
@@ -173,7 +163,8 @@ case class Playground(private val input: Seq[String]):
   def findStart: Position = Position(0, data(0).indexWhere(_ == Open))
 
   @tailrec
-  final def nextFree(fromPosition: Position, walkThrough: Position => Position, maxSteps: Int): Position =
+  final def nextFree(fromPosition: Position, walkThrough: Position => Position, maxSteps: Int, direction: Direction): Position =
+    Holder.add(Status(fromPosition, direction))
     maxSteps match
       case 0 => fromPosition
       case _ =>
@@ -181,12 +172,31 @@ case class Playground(private val input: Seq[String]):
         isDefined(newPotentialPosition) match
           case true => isWall(newPotentialPosition) match
             case true => fromPosition
-            case false => nextFree(newPotentialPosition, walkThrough, maxSteps - 1)
+            case false => nextFree(newPotentialPosition, walkThrough, maxSteps - 1, direction)
           case false =>
             val jumpedPosition = jumpToNext(newPotentialPosition, fromPosition)
             //println(s"Jumped from $fromPosition to $jumpedPosition because of $newPotentialPosition")
             isWall(jumpedPosition) match
               case true => fromPosition
-              case false => nextFree(jumpedPosition, walkThrough, maxSteps - 1)
+              case false => nextFree(jumpedPosition, walkThrough, maxSteps - 1, direction)
 
   override def toString: String = data.map(_.mkString).mkString("\n")
+
+  def printPath: Unit =
+    for row <- 0 until height
+        col <- 0 until width
+    do
+      Holder.path.find(current => current.position == Position(row, col)) match
+        case Some(Status(_, direction)) => direction match
+          case Up => print("^")
+          case Down => print("v")
+          case Right => print(">")
+          case Left => print("<")
+        case None => print(data(row)(col))
+      if (col == width-1)
+        println("")
+
+object Holder:
+  var path : List[Status] = Nil
+  def empty = path = Nil
+  def add(status: Status) = path = status :: path
