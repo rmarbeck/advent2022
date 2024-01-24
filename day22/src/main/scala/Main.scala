@@ -23,25 +23,15 @@ object Solver:
 
     val (playgroundInput, pathInput) = inputLines.span(!_.isEmpty)
 
-    Holder.empty
-
     val playground = Playground(playgroundInput)
-
-    println(s"Playgrround : height = ${playground.height}, width = ${playground.width}")
 
     val path = Path(pathInput.last)
 
-    println(playground)
+    //println(playground)
 
-    def move(status: Status, nextMove: (Int, Turn))(using playground: Playground): Status =
+    def move(status: Status, nextMove: (Int, Turn))(using playground: Playground, strategy: Strategy): Status =
       def next(position: Position, direction: Direction, maxSteps: Int): Position =
-        import Position._
-        val toGo = direction match
-          case Right => goRight
-          case Left => goLeft
-          case Up => goUp
-          case Down => goDown
-        playground.nextFree(position, toGo, maxSteps, direction)
+        playground.nextFree(position, maxSteps, direction)
 
       val Status(currentPosition, currentDirection) = status
       val (maxSteps, turn) = nextMove
@@ -50,22 +40,28 @@ object Solver:
       Status(nextPosition, finalDirection)
 
     val start = Status(playground.findStart, Right)
-    println(start)
+    //println(start)
     given Playground = playground
+    given part1Strat: Strategy = Part1
     val end = path.moves.foldLeft(start):
       case (acc, newMove) =>
-        val result = move(acc, newMove)
+        val result = move(acc, newMove)(using playground, part1Strat)
         //println(s"$newMove => $result")
         result
 
-    playground.printPath
+    given part2Strat: Strategy = Part2
+    val end2 = path.moves.foldLeft(start):
+      case (acc, newMove) =>
+        val result = move(acc, newMove)(using playground, part2Strat)
+        //println(s"$newMove => $result")
+        result
 
-    println(s" END is $end")
+    //println(s" END is $end")
     /*println(end.score)
     println(path)*/
 
     val result1 = s"${end.score}"
-    val result2 = s""
+    val result2 = s"${end2.score}"
 
     (s"${result1}", s"${result2}")
 
@@ -136,35 +132,89 @@ object Position:
 case class Status(position: Position, direction: Direction):
   lazy val score = (position.row + 1) * 1000 + 4 * (position.col + 1) + direction.ordinal
 
+enum Strategy:
+  case Part1, Part2
+
+export Strategy._
+
 case class Playground(private val input: Seq[String]):
   val width = input.map(_.length).max
   val height = input.size
   val data = Array.fill(height, width)(Empty)
-  def isDefined(position: Position) = data.isDefinedAt(position.row) && data(position.row).isDefinedAt(position.col) && data(position.row)(position.col) != Empty
-  def isWall(position: Position) = isDefined(position) && data(position.row)(position.col) == SolidWall
-  def jumpToNext(undefinedPosition: Position, fromPosition: Position): Position =
-    def findMostRightOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).last)
-    def findMostLeftOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).head)
-    def findMostDownOnCol(col: Int) = Position( (0 until height).filter(data(_)(col) != Empty).last, col)
-    def findMostUpOnCol(col: Int) = Position((0 until height).filter(data(_)(col) != Empty).head, col)
-    undefinedPosition.row - fromPosition.row match
-      case 0 => undefinedPosition.col - fromPosition.col match
-        case diffOnCOl if diffOnCOl < 0 => findMostRightOnRow(fromPosition.row)
-        case _ => findMostLeftOnRow(fromPosition.row)
-      case diffOnRow if diffOnRow < 0 => findMostDownOnCol(fromPosition.col)
-      case _ => findMostUpOnCol(fromPosition.col)
-
   input.zipWithIndex.foreach:
     case (line, index) => line.zipWithIndex.foreach:
       case ('.', indexOfChar) => data(index)(indexOfChar) = Open
       case ('#', indexOfChar) => data(index)(indexOfChar) = SolidWall
       case _ => ()
 
+  def isDefined(position: Position) = data.isDefinedAt(position.row) && data(position.row).isDefinedAt(position.col) && data(position.row)(position.col) != Empty
+  def isWall(position: Position) = isDefined(position) && data(position.row)(position.col) == SolidWall
+  def jumpToNextPart1(undefinedPosition: Position, fromPosition: Position, direction: Direction): (Position, Direction) =
+    def findMostRightOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).last)
+    def findMostLeftOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).head)
+    def findMostDownOnCol(col: Int) = Position( (0 until height).filter(data(_)(col) != Empty).last, col)
+    def findMostUpOnCol(col: Int) = Position((0 until height).filter(data(_)(col) != Empty).head, col)
+    val newPosition = undefinedPosition.row - fromPosition.row match
+      case 0 => undefinedPosition.col - fromPosition.col match
+        case diffOnCOl if diffOnCOl < 0 => findMostRightOnRow(fromPosition.row)
+        case _ => findMostLeftOnRow(fromPosition.row)
+      case diffOnRow if diffOnRow < 0 => findMostDownOnCol(fromPosition.col)
+      case _ => findMostUpOnCol(fromPosition.col)
+    (newPosition, direction)
+
+  def jumpToNextPart2(undefinedPosition: Position, fromPosition: Position, direction: Direction): (Position, Direction) =
+    enum Face:
+      case One, Two, Three, Four, Five, Six
+
+    def findFaceWeWereOn: Face =
+      fromPosition match
+        case Position(row, col) if row < height / 3 => Face.One
+        case Position(row, col) if row >= height / 3 && row < ((2 * height) / 3) => col match
+          case col if col < width / 4 => Face.Two
+          case col if col >= width / 4 && col < ((2 * width) / 4) => Face.Three
+          case _ => Face.Four
+        case Position(row, col) => col match
+          case col if col < ((3 * width) / 4) => Face.Five
+          case _ => Face.Six
+    def findMostRightOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).last)
+    def findMostLeftOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).head)
+    def findMostDownOnCol(col: Int) = Position((0 until height).filter(data(_)(col) != Empty).last, col)
+    def findMostUpOnCol(col: Int) = Position((0 until height).filter(data(_)(col) != Empty).head, col)
+
+    val newPosition = findFaceWeWereOn match
+      case Face.One => undefinedPosition match
+        case Position(-1, col) => findMostUpOnCol(col)
+        case Position(row, col) if col == width => findMostLeftOnRow(row)
+        case Position(row, col) if col <= 3 * width / 4 => findMostRightOnRow(row)
+        case Position(row, col) => throw Exception(s"Not relevant One => $row $col")
+      case Face.Two | Face.Three => undefinedPosition match
+        case Position(row, -1) => findMostRightOnRow(row)
+        case Position(row, col) if row <= height / 3 => findMostUpOnCol(col)
+        case Position(row, col) if row >= 2 * height / 3  => findMostDownOnCol(col)
+        case Position(row, col) => throw Exception(s"Not relevant Two or Three => $row $col [${height / 3}] [${2 * height / 3}] - $fromPosition => $findFaceWeWereOn ")
+      case Face.Four => undefinedPosition match
+        case Position(row, _) => findMostLeftOnRow(row)
+      case Face.Five | Face.Six => undefinedPosition match
+        case Position(row, col) if col == width => findMostLeftOnRow(row)
+        case Position(row, col) if row == height => findMostUpOnCol(col)
+        case Position(row, col) if row <= 2 * height / 3 => findMostDownOnCol(col)
+        case Position(row, col) if col <= 3 * width / 4 => findMostRightOnRow(row)
+        case Position(row, col) => throw Exception(s"Not relevant Five or Six => $row $col")
+
+    (newPosition, direction)
+
   def findStart: Position = Position(0, data(0).indexWhere(_ == Open))
 
   @tailrec
-  final def nextFree(fromPosition: Position, walkThrough: Position => Position, maxSteps: Int, direction: Direction): Position =
-    Holder.add(Status(fromPosition, direction))
+  final def nextFree(fromPosition: Position, maxSteps: Int, direction: Direction)(using strategy: Strategy = Part1): Position =
+    import Position._
+
+    val walkThrough = direction match
+      case Right => goRight
+      case Left => goLeft
+      case Up => goUp
+      case Down => goDown
+
     maxSteps match
       case 0 => fromPosition
       case _ =>
@@ -172,31 +222,14 @@ case class Playground(private val input: Seq[String]):
         isDefined(newPotentialPosition) match
           case true => isWall(newPotentialPosition) match
             case true => fromPosition
-            case false => nextFree(newPotentialPosition, walkThrough, maxSteps - 1, direction)
+            case false => nextFree(newPotentialPosition, maxSteps - 1, direction)
           case false =>
-            val jumpedPosition = jumpToNext(newPotentialPosition, fromPosition)
+            val (jumpedPosition, newDirection) = strategy match
+              case Part1 => jumpToNextPart1(newPotentialPosition, fromPosition, direction)
+              case Part2 => jumpToNextPart2(newPotentialPosition, fromPosition, direction)
             //println(s"Jumped from $fromPosition to $jumpedPosition because of $newPotentialPosition")
             isWall(jumpedPosition) match
               case true => fromPosition
-              case false => nextFree(jumpedPosition, walkThrough, maxSteps - 1, direction)
+              case false => nextFree(jumpedPosition, maxSteps - 1, direction)
 
   override def toString: String = data.map(_.mkString).mkString("\n")
-
-  def printPath: Unit =
-    for row <- 0 until height
-        col <- 0 until width
-    do
-      Holder.path.find(current => current.position == Position(row, col)) match
-        case Some(Status(_, direction)) => direction match
-          case Up => print("^")
-          case Down => print("v")
-          case Right => print(">")
-          case Left => print("<")
-        case None => print(data(row)(col))
-      if (col == width-1)
-        println("")
-
-object Holder:
-  var path : List[Status] = Nil
-  def empty = path = Nil
-  def add(status: Status) = path = status :: path
