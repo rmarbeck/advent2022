@@ -58,11 +58,11 @@ object Solver:
 
     val steps = Holder.path.length
     val reversePath = Holder.path.reverse
-    (0 until steps).foreach:
+    /*(0 until steps).foreach:
       case index =>
         print("\u001b[2J")
         playground.printPath(reversePath.take(index))
-        Thread.sleep(500)
+        Thread.sleep(400)*/
 
 
 
@@ -70,31 +70,27 @@ object Solver:
     val testDataCanvas = CubeCanvas(NoneRotation, NoneRotation, OneHalf, OneFourth, OneHalf)
     val realDataCanvas = CubeCanvas(NoneRotation, NoneRotation, ThreeFourth, OneHalf, NoneRotation)
 
-    assert(DriftOneFourth + ThreeFourth == Aligned)
-    assert(DriftOneFourth - ThreeFourth == DriftOneHalf)
-    assert(DriftOneHalf + ThreeFourth == DriftOneFourth)
+    assert(tCanvas.move(One, Up) == (Four, Up), "1")
+    assert(tCanvas.move(Two, Right) == (Six, Up), "2")
+    assert(tCanvas.move(Two, Left) == (Five, Up), "3")
+    assert(tCanvas.move(Three, Right) == (Six, Left), "4")
+    assert(tCanvas.move(Three, Left) == (Five, Right), "5")
 
-    assert(tCanvas.move(One, Up) == (Four, Up, Aligned), "1")
-    assert(tCanvas.move(Two, Right) == (Six, Up, DriftOneFourth), "2")
-    assert(tCanvas.move(Two, Left) == (Five, Up, DriftThreeFourth), "3")
-    assert(tCanvas.move(Three, Right) == (Six, Left, DriftOneHalf), "4")
-    assert(tCanvas.move(Three, Left) == (Five, Right, DriftOneHalf), "5")
+    assert(testDataCanvas.move(One, Up) == (Four, Down), "10")
+    assert(testDataCanvas.move(Two, Right) == (Six, Down), "12")
+    assert(testDataCanvas.move(Three, Down) == (Four, Up), "13")
+    assert(testDataCanvas.move(Three, Right) == (Six, Right), "14")
+    assert(testDataCanvas.move(Three, Left) == (Five, Up), s"15 ${testDataCanvas.move(Three, Left)}")
+    assert(testDataCanvas.move(Five, Up) == (One, Right), "16")
+    assert(testDataCanvas.move(Five, Down) == (Three, Right), "17")
 
-    assert(testDataCanvas.move(One, Up) == (Four, Down, DriftOneHalf), "10")
-    assert(testDataCanvas.move(Two, Right) == (Six, Down, DriftThreeFourth), "12")
-    assert(testDataCanvas.move(Three, Down) == (Four, Up, DriftOneHalf), "13")
-    assert(testDataCanvas.move(Three, Right) == (Six, Right, Aligned), "14")
-    assert(testDataCanvas.move(Three, Left) == (Five, Up, DriftThreeFourth), s"15 ${testDataCanvas.move(Three, Left)}")
-    assert(testDataCanvas.move(Five, Up) == (One, Right, DriftThreeFourth), "16")
-    assert(testDataCanvas.move(Five, Down) == (Three, Right, DriftOneFourth), "17")
-
-    assert(realDataCanvas.move(One, Up) == (Four, Right, DriftThreeFourth), s"20 ${realDataCanvas.move(One, Up)}")
-    assert(realDataCanvas.move(Four, Left) == (One, Down, DriftThreeFourth), s"20b ${realDataCanvas.move(One, Up)}")
-    assert(realDataCanvas.move(Six, Up) == (Four, Up, Aligned), s"21 ${realDataCanvas.move(Six, Up)}")
-    assert(realDataCanvas.move(Two, Right) == (Six, Up, DriftOneFourth), "22")
-    assert(realDataCanvas.move(Three, Down) == (Four, Left, DriftThreeFourth), "23")
-    assert(realDataCanvas.move(Three, Right) == (Six, Left, DriftOneHalf), "24")
-    assert(realDataCanvas.move(Two, Left) == (Five, Down, DriftOneFourth), "25")
+    assert(realDataCanvas.move(One, Up) == (Four, Right), s"20 ${realDataCanvas.move(One, Up)}")
+    assert(realDataCanvas.move(Four, Left) == (One, Down), s"20b ${realDataCanvas.move(One, Up)}")
+    assert(realDataCanvas.move(Six, Up) == (Four, Up), s"21 ${realDataCanvas.move(Six, Up)}")
+    assert(realDataCanvas.move(Two, Right) == (Six, Up), "22")
+    assert(realDataCanvas.move(Three, Down) == (Four, Left), "23")
+    assert(realDataCanvas.move(Three, Right) == (Six, Left), "24")
+    assert(realDataCanvas.move(Two, Left) == (Five, Down), "25")
 
     //println(s" END is $end")
     /*println(end.score)
@@ -308,7 +304,7 @@ export DirectionDrift.*
 
 enum FaceId:
   case One, Two, Three, Four, Five, Six
-  def move(direction: Direction): (FaceId, Direction, DirectionDrift) = VirtualTCube.move(this, direction)
+  def move(direction: Direction): (FaceId, Direction) = VirtualTCube.move(this, direction)
 
 export FaceId.*
 
@@ -332,7 +328,7 @@ case class Cube(canvas: CubeCanvas, leftUpCorners: List[(FaceId, Position)]):
       .head
     (face, relativePosition)
 
-  def locate(faceTo: FaceId, newDirection: Direction, originalDirection: Direction, relativePosition: Position, drift: DirectionDrift, useRowInformation: Boolean): Position =
+  def locate(faceTo: FaceId, newDirection: Direction, originalDirection: Direction, relativePosition: Position, useRowInformation: Boolean): Position =
     def getRelativePositionMeaningFull =
       useRowInformation match
         case true => relativePosition.row
@@ -342,12 +338,12 @@ case class Cube(canvas: CubeCanvas, leftUpCorners: List[(FaceId, Position)]):
         case true => faceSize - 1 - relativePosition.row
         case false => faceSize - 1 - relativePosition.col
     def guessRow: Int =
-      (drift, useRowInformation, originalDirection) match
-        case (Aligned, true, _) | (DriftOneFourth, false, _) | (DriftOneHalf, false, _) | (DriftThreeFourth, true, Left) => getRelativePositionMeaningFull
+      (originalDirection, newDirection) match
+        case (Up, Right) | (Down, Left) | (Left, Left) | (Right, Right) => getRelativePositionMeaningFull
         case _ => getRelativePositionDrifted
     def guessCol: Int =
-      (drift, useRowInformation, originalDirection) match
-        case (Aligned, false, _) | (DriftThreeFourth, true, _) | (DriftOneFourth, true, _) | (DriftOneHalf, true, _) => getRelativePositionMeaningFull
+      (originalDirection, newDirection) match
+        case (Left, Down) | (Right, Up) | (Up, Up) | (Down, Down) => getRelativePositionMeaningFull
         case _ => getRelativePositionDrifted
     val leftUpCorner = leftUpCorners.filter(_._1 == faceTo).map(_._2).head
     newDirection match
@@ -358,23 +354,22 @@ case class Cube(canvas: CubeCanvas, leftUpCorners: List[(FaceId, Position)]):
   def move(position: Position, direction: Direction, undefinedPosition: Position): (Position, Direction) =
     val (faceFrom, relativePosition) = face(position)
     loggerAOCPart2.trace(s"\n\nI am on face n° ${faceFrom} at location ${relativePosition}")
-    val (faceTo, newDirection, drift) = canvas.move(faceFrom, direction)
-    loggerAOCPart2.trace(s"Supposed to move to face n° ${faceTo} going $newDirection, drift is ${drift}")
+    val (faceTo, newDirection) = canvas.move(faceFrom, direction)
+    loggerAOCPart2.trace(s"Supposed to move to face n° ${faceTo} going $newDirection")
     val useRowInformation =
       undefinedPosition - position match
         case (0, _) => true
         case (_, 0) => false
         case _ => throw Exception("Unexpected result")
-    val newLocation = locate(faceTo, newDirection, direction, relativePosition, drift, useRowInformation)
-    loggerAOCPart2.debug(s"\n\nJump \t${faceFrom}\t${faceTo}\t\t: $direction >= $newDirection - ${relativePosition} to ${face(newLocation)._2}, drift is $drift, we used row ? $useRowInformation")
+    val newLocation = locate(faceTo, newDirection, direction, relativePosition, useRowInformation)
+    loggerAOCPart2.debug(s"\n\nJump \t${faceFrom}\t${faceTo}\t\t: $direction >= $newDirection - ${relativePosition} to ${face(newLocation)._2}, we used row ? $useRowInformation")
     loggerAOCPart2.trace(s"Location found is $newLocation [rel : ${face(newLocation)._2}], we used row ? $useRowInformation\n")
     (newLocation, newDirection)
 
 class CubeCanvas(val rTwo: FaceRotation, val rThree: FaceRotation, val rFour: FaceRotation, val rFive: FaceRotation, val rSix: FaceRotation):
-  def move(faceFrom: FaceId, direction: Direction): (FaceId, Direction, DirectionDrift) =
-    val (faceTo, temporaryDirection, drift) = faceFrom.move(transformOut(faceFrom, direction))
-    loggerAOCPart2.trace(s"Drift : $drift => ${drift + rotationFactor(faceTo) - rotationFactor(faceFrom)}")
-    (faceTo, transformIn(faceTo, temporaryDirection), drift + rotationFactor(faceTo) - rotationFactor(faceFrom))
+  def move(faceFrom: FaceId, direction: Direction): (FaceId, Direction) =
+    val (faceTo, temporaryDirection) = faceFrom.move(transformOut(faceFrom, direction))
+    (faceTo, transformIn(faceTo, temporaryDirection))
   def rotationFactor(faceId: FaceId) = faceId match
     case One => NoneRotation
     case Two => rTwo
@@ -387,7 +382,7 @@ class CubeCanvas(val rTwo: FaceRotation, val rThree: FaceRotation, val rFour: Fa
   def transformIn(faceTo: FaceId, direction: Direction): Direction = direction - rotationFactor(faceTo)
 
 object VirtualTCube:
-  def move(faceFrom: FaceId, direction: Direction): (FaceId, Direction, DirectionDrift) =
+  def move(faceFrom: FaceId, direction: Direction): (FaceId, Direction) =
     def sameDir(faceId: FaceId) = (faceId, direction)
     def altDir(faceId: FaceId) = faceFrom match
       case Two => (faceId, Up)
@@ -398,38 +393,37 @@ object VirtualTCube:
       case Four => (faceId, Down)
       case Five => (faceId, Right)
       case _ => (faceId, Left)
-    val (next, mustTurn, drift) = faceFrom match
+    val (next, mustTurn) = faceFrom match
       case One => direction match
-        case Up =>      (Four,   false, Aligned)
-        case Right =>   (Six,   false, Aligned)
-        case Down =>    (Two, false, Aligned)
-        case Left =>    (Five,  false, Aligned)
+        case Up =>      (Four,   false)
+        case Right =>   (Six,   false)
+        case Down =>    (Two, false)
+        case Left =>    (Five,  false)
       case Two => direction match
-        case Up =>      (One,   false, Aligned)
-        case Right =>   (Six,   true, DriftOneFourth)
-        case Down =>    (Three, false, Aligned)
-        case Left =>    (Five,  true, DriftThreeFourth)
+        case Up =>      (One,   false)
+        case Right =>   (Six,   true)
+        case Down =>    (Three, false)
+        case Left =>    (Five,  true)
       case Three => direction match
-        case Up =>      (Two,   false, Aligned)
-        case Right =>   (Six,   true, DriftOneHalf) // => Left
-        case Down =>    (Four,  false, Aligned)
-        case Left =>    (Five,  true, DriftOneHalf) // => Right
+        case Up =>      (Two,   false)
+        case Right =>   (Six,   true) // => Left
+        case Down =>    (Four,  false)
+        case Left =>    (Five,  true) // => Right
       case Four => direction match
-        case Up =>      (Three, false, Aligned)
-        case Right =>   (Six,   true, DriftOneFourth)
-        case Down =>    (One,   false, DriftOneHalf)
-        case Left =>    (Five,  true, DriftOneFourth)
+        case Up =>      (Three, false)
+        case Right =>   (Six,   true)
+        case Down =>    (One,   false)
+        case Left =>    (Five,  true)
       case Five => direction match
-        case Up =>      (Four,  true, DriftThreeFourth)
-        case Right =>   (One,   false, Aligned)
-        case Down =>    (Two,   true, DriftOneFourth)
-        case Left =>    (Three, true, DriftOneHalf)
+        case Up =>      (Four,  true)
+        case Right =>   (One,   false)
+        case Down =>    (Two,   true)
+        case Left =>    (Three, true)
       case Six => direction match
-        case Up =>      (Four,  true, DriftOneFourth)
-        case Right =>   (Three, true, DriftOneHalf)
-        case Down =>    (Two,   true, DriftThreeFourth)
-        case Left =>    (One,   false, Aligned)
-    val result = mustTurn match
+        case Up =>      (Four,  true)
+        case Right =>   (Three, true)
+        case Down =>    (Two,   true)
+        case Left =>    (One,   false)
+    mustTurn match
       case false => sameDir(next)
       case true =>  altDir(next)
-    (result._1, result._2, drift)
