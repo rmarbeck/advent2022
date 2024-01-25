@@ -41,20 +41,42 @@ object Solver:
 
     val start = Status(playground.findStart, Right)
     //println(start)
-    given Playground = playground
-    given part1Strat: Strategy = Part1
+
     val end = path.moves.foldLeft(start):
       case (acc, newMove) =>
-        val result = move(acc, newMove)(using playground, part1Strat)
+        val result = move(acc, newMove)(using playground, Part1)
         //println(s"$newMove => $result")
         result
 
-    given part2Strat: Strategy = Part2
     val end2 = path.moves.foldLeft(start):
       case (acc, newMove) =>
-        val result = move(acc, newMove)(using playground, part2Strat)
+        val result = move(acc, newMove)(using playground, Part2)
         //println(s"$newMove => $result")
         result
+
+    val tCanvas = CubeCanvas(None, None, None, None, None)
+    val testDataCanvas = CubeCanvas(None, None, OneHalf, OneFourth, OneHalf)
+    val realDataCanvas = CubeCanvas(None, None, OneHalf, OneHalf, None)
+
+    assert(tCanvas.move(One, Up) == (Four, Up), "1")
+    assert(tCanvas.move(Two, Right) == (Six, Up), "2")
+    assert(tCanvas.move(Two, Left) == (Five, Up), "3")
+    assert(tCanvas.move(Three, Right) == (Six, Left), "4")
+    assert(tCanvas.move(Three, Left) == (Five, Right), "5")
+
+    assert(testDataCanvas.move(One, Up) == (Four, Down), "10")
+    assert(testDataCanvas.move(Two, Right) == (Six, Down), "12")
+    assert(testDataCanvas.move(Three, Down) == (Four, Up), "13")
+    assert(testDataCanvas.move(Three, Right) == (Six, Right), "14")
+    assert(testDataCanvas.move(Three, Left) == (Five, Up), "15")
+    assert(testDataCanvas.move(Five, Up) == (One, Right), "16")
+    assert(testDataCanvas.move(Five, Down) == (Three, Right), "17")
+
+    assert(realDataCanvas.move(One, Up) == (Four, Down), "20")
+    assert(realDataCanvas.move(Two, Right) == (Six, Up), "22")
+    assert(realDataCanvas.move(Three, Down) == (Four, Up), "23")
+    assert(realDataCanvas.move(Three, Right) == (Six, Left), "24")
+    assert(realDataCanvas.move(Two, Left) == (Five, Down), "25")
 
     //println(s" END is $end")
     /*println(end.score)
@@ -80,6 +102,12 @@ end Solver
 enum Direction:
   lazy val modulo = Direction.values.length
   case Right, Down, Left, Up
+  def +(faceRotation: FaceRotation) = (0 until faceRotation.ordinal).foldLeft(this):
+    case (acc, _) => acc.turn(Clockwise)
+
+  def -(faceRotation: FaceRotation) = (0 until faceRotation.ordinal).foldLeft(this):
+    case (acc, _) => acc.turn(CounterClockwise)
+
   def turn(turnDir: Turn) =
     turnDir match
       case Clockwise => Direction.fromOrdinal((this.ordinal + 1) % modulo)
@@ -121,7 +149,12 @@ case class Path(private val input: String):
 
   override def toString: String = s"$moves"
 
-case class Position(row: Int, col: Int)
+case class Position(row: Int, col: Int):
+  def inCommon(otherPosition: Position): Int =
+    (row == otherPosition.row, col == otherPosition.col) match
+      case (true, false) => row
+      case (false, true) => col
+      case _ => throw Exception("Not defined")
 
 object Position:
   def goRight(from: Position): Position = from.copy(col = from.col + 1)
@@ -147,6 +180,18 @@ case class Playground(private val input: Seq[String]):
       case ('#', indexOfChar) => data(index)(indexOfChar) = SolidWall
       case _ => ()
 
+  def guessCanvas: CubeCanvas =
+    width match
+      case 16 => CubeCanvas(None, None, OneHalf, OneFourth, OneHalf)
+      case 200 => CubeCanvas(None, None, OneHalf, OneHalf, None)
+      case _ => throw Exception("Not implemented")
+  def findLeftCorners: List[(FaceId, Position)] =
+    width match
+      case 16 => List((One, Position(0, 8)), (Two, Position(4, 8)), (Three, Position(8, 8)), (Four, Position(4, 0)), (Five, Position(4, 4)), (Six, Position(8, 12)))
+      case 200 => List((One, Position(0, 50)), (Two, Position(50, 50)), (Three, Position(100, 50)), (Four, Position(150, 0)), (Five, Position(100, 0)), (Six, Position(8, 100)))
+      case _ => throw Exception("Not implemented")
+  lazy val cube = Cube(guessCanvas, findLeftCorners)
+
   def isDefined(position: Position) = data.isDefinedAt(position.row) && data(position.row).isDefinedAt(position.col) && data(position.row)(position.col) != Empty
   def isWall(position: Position) = isDefined(position) && data(position.row)(position.col) == SolidWall
   def jumpToNextPart1(undefinedPosition: Position, fromPosition: Position, direction: Direction): (Position, Direction) =
@@ -163,51 +208,15 @@ case class Playground(private val input: Seq[String]):
     (newPosition, direction)
 
   def jumpToNextPart2(undefinedPosition: Position, fromPosition: Position, direction: Direction): (Position, Direction) =
-    enum Face:
-      case One, Two, Three, Four, Five, Six
-
-    def findFaceWeWereOn: Face =
-      fromPosition match
-        case Position(row, col) if row < height / 3 => Face.One
-        case Position(row, col) if row >= height / 3 && row < ((2 * height) / 3) => col match
-          case col if col < width / 4 => Face.Two
-          case col if col >= width / 4 && col < ((2 * width) / 4) => Face.Three
-          case _ => Face.Four
-        case Position(row, col) => col match
-          case col if col < ((3 * width) / 4) => Face.Five
-          case _ => Face.Six
-    def findMostRightOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).last)
-    def findMostLeftOnRow(row: Int) = Position(row, data(row).zipWithIndex.filter(current => current._1 != Empty).map(_._2).head)
-    def findMostDownOnCol(col: Int) = Position((0 until height).filter(data(_)(col) != Empty).last, col)
-    def findMostUpOnCol(col: Int) = Position((0 until height).filter(data(_)(col) != Empty).head, col)
-
-    val newPosition = findFaceWeWereOn match
-      case Face.One => undefinedPosition match
-        case Position(-1, col) => findMostUpOnCol(col)
-        case Position(row, col) if col == width => findMostLeftOnRow(row)
-        case Position(row, col) if col <= 3 * width / 4 => findMostRightOnRow(row)
-        case Position(row, col) => throw Exception(s"Not relevant One => $row $col")
-      case Face.Two | Face.Three => undefinedPosition match
-        case Position(row, -1) => findMostRightOnRow(row)
-        case Position(row, col) if row <= height / 3 => findMostUpOnCol(col)
-        case Position(row, col) if row >= 2 * height / 3  => findMostDownOnCol(col)
-        case Position(row, col) => throw Exception(s"Not relevant Two or Three => $row $col [${height / 3}] [${2 * height / 3}] - $fromPosition => $findFaceWeWereOn ")
-      case Face.Four => undefinedPosition match
-        case Position(row, _) => findMostLeftOnRow(row)
-      case Face.Five | Face.Six => undefinedPosition match
-        case Position(row, col) if col == width => findMostLeftOnRow(row)
-        case Position(row, col) if row == height => findMostUpOnCol(col)
-        case Position(row, col) if row <= 2 * height / 3 => findMostDownOnCol(col)
-        case Position(row, col) if col <= 3 * width / 4 => findMostRightOnRow(row)
-        case Position(row, col) => throw Exception(s"Not relevant Five or Six => $row $col")
-
-    (newPosition, direction)
+    println(s"jumpToNextPart2 : $undefinedPosition, $fromPosition, $direction")
+    cube.move(fromPosition, direction, undefinedPosition)
 
   def findStart: Position = Position(0, data(0).indexWhere(_ == Open))
 
   @tailrec
   final def nextFree(fromPosition: Position, maxSteps: Int, direction: Direction)(using strategy: Strategy = Part1): Position =
-    import Position._
+    println(s"nextFree : $fromPosition, $maxSteps, $direction, $strategy")
+    import Position.*
 
     val walkThrough = direction match
       case Right => goRight
@@ -233,3 +242,112 @@ case class Playground(private val input: Seq[String]):
               case false => nextFree(jumpedPosition, maxSteps - 1, direction)
 
   override def toString: String = data.map(_.mkString).mkString("\n")
+
+enum FaceRotation:
+  case None, OneFourth, OneHalf, ThreeFourth
+
+export FaceRotation.*
+
+enum FaceId:
+  case One, Two, Three, Four, Five, Six
+  def move(direction: Direction): (FaceId, Direction) = VirtualTCube.move(this, direction)
+
+export FaceId.*
+
+case class Cube(canvas: CubeCanvas, leftUpCorners: List[(FaceId, Position)]):
+  val faceSize =
+    val fromWidth = leftUpCorners.map(_._2.col).max
+    val fromHeight = leftUpCorners.map(_._2.row).max
+    val List(min, max) = List(fromWidth, fromHeight).sorted
+    min / 2 == max / 3 match
+      case true => min / 2
+      case false => throw Exception(s"Not supported canvas ${fromWidth} != ${fromHeight}")
+  def face(position: Position): (FaceId, Position) =
+    val face = position match
+      case Position(row, col) =>
+        println(s"${position} $faceSize -> $leftUpCorners")
+        leftUpCorners.find:
+          case (_, Position(rowStart, colStart)) =>
+            val result = row >= rowStart && row < rowStart + faceSize && col >= colStart && col < colStart + faceSize
+            println(s"$result")
+            result
+        .map(_._1).get
+    val relativePosition =
+      leftUpCorners.filter(_._1 == face).map:
+        case (_, Position(rowStart, colStart)) => Position(position.row - rowStart, position.col - colStart)
+      .head
+    (face, relativePosition)
+
+  def locate(faceFrom: FaceId, faceTo: FaceId, direction: Direction, fromPosition: Position, undefinedPosition: Position, relativePosition: Position): Position =
+    def guessRow: Int = relativePosition.row
+    def guessCol: Int = relativePosition.col
+    val leftUpCorner = leftUpCorners.filter(_._1 == faceTo).map(_._2).head
+    direction match
+      case Up => Position(leftUpCorner.row + faceSize - 1, leftUpCorner.col + guessCol)
+      case Down => Position(leftUpCorner.row, leftUpCorner.col + guessCol)
+      case Left => Position(leftUpCorner.row + guessRow, leftUpCorner.col)
+      case Right => Position(leftUpCorner.row + guessRow, leftUpCorner.col + faceSize - 1)
+  def move(position: Position, direction: Direction, undefinedPosition: Position): (Position, Direction) =
+    val (faceFrom, relativePosition) = face(position)
+    val (faceTo, newDirection) = canvas.move(faceFrom, direction)
+    (locate(faceFrom, faceTo, newDirection, position, undefinedPosition, relativePosition), newDirection)
+
+class CubeCanvas(val rTwo: FaceRotation, val rThree: FaceRotation, val rFour: FaceRotation, val rFive: FaceRotation, val rSix: FaceRotation):
+  def move(faceFrom: FaceId, direction: Direction): (FaceId, Direction) =
+    val (faceTo, temporaryDirection) = faceFrom.move(transformOut(faceFrom, direction))
+    (faceTo, transformIn(faceTo, temporaryDirection))
+  def rotationFactor(faceId: FaceId) = faceId match
+    case One => None
+    case Two => rTwo
+    case Three => rThree
+    case Four => rFour
+    case Five => rFive
+    case Six => rSix
+  def transformOut(faceFrom: FaceId, direction: Direction): Direction = direction + rotationFactor(faceFrom)
+
+  def transformIn(faceTo: FaceId, direction: Direction): Direction = direction - rotationFactor(faceTo)
+
+object VirtualTCube:
+  def move(faceFrom: FaceId, direction: Direction): (FaceId, Direction) =
+    val dirs = List(Up, Right, Down, Left)
+    def direct(faceU: FaceId, faceR: FaceId, faceD: FaceId, faceL: FaceId) = dirs.zip(List(faceU, faceR, faceD, faceL)).find(_._1 == direction).map(found => (found._2, false)).get
+    def sameDir(faceId: FaceId) = (faceId, direction)
+    def altDir(faceId: FaceId) = faceFrom match
+      case Two => (faceId, Up)
+      case Three => faceId match
+        case Six => (faceId, Left)
+        case Five => (faceId, Right)
+        case _ => throw Exception("Unsupported")
+      case Four => (faceId, Down)
+      case Five => (faceId, Right)
+      case _ => (faceId, Left)
+    val (next, mustTurn) = faceFrom match
+      case One => direct(Four, Five, Two, Six)
+      case Two => direction match
+        case Up =>      (One,   false)
+        case Right =>   (Six,   true)
+        case Down =>    (Three, false)
+        case Left =>    (Five,  true)
+      case Three => direction match
+        case Up =>      (Two,   false)
+        case Right =>   (Six,   true) // => Left
+        case Down =>    (Four,  false)
+        case Left =>    (Five,  true) // => Right
+      case Four => direction match
+        case Up =>      (Three, false)
+        case Right =>   (Six,   true)
+        case Down =>    (One,   false)
+        case Left =>    (Five,  true)
+      case Five => direction match
+        case Up =>      (Four,  true)
+        case Right =>   (One,   false)
+        case Down =>    (Two,   true)
+        case Left =>    (Three, true)
+      case Six => direction match
+        case Up =>      (Four,  true)
+        case Right =>   (One,   false)
+        case Down =>    (Two,   true)
+        case Left =>    (Three, true)
+    mustTurn match
+      case false => sameDir(next)
+      case true =>  altDir(next)
