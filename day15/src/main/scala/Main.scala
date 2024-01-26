@@ -38,17 +38,17 @@ object Solver:
 
     //val underSurveillance = sensors.flatMap(_.impossiblePositionsOnRow(row)).toSet
 
-    val resultPart1 = sensors.tail.foldLeft((sensors.head.impossiblePositionsOnRow(row), Set[Int]() ++ sensors.head.xPosIfClosestBeaconOnRow(row))) { (acc, sensor) =>
+    val resultPart1 = sensors.foldLeft((RangeSet.empty, Set[Int]())) { (acc, sensor) =>
       (merge(acc._1, sensor.impossiblePositionsOnRow(row)), acc._2 ++ sensor.xPosIfClosestBeaconOnRow(row))
     } match
       case (scanned, beacons) =>
         scanned.size - beacons.size
 
-    val resultPart2 = rows.zipWithIndex.par.map((currentRow, index) => (sensors.tail.foldLeft(sensors.head.impossiblePositionsOnRow(currentRow)) { (acc, sensor) =>
-      merge(acc, sensor.impossiblePositionsOnRow(currentRow))
-    }.shrinkTo(rows.start, rows.end), index)).find(_._1.size == rows.end).map((rangeMatching, rowIndex) => (rowIndex, rangeMatching.findHoles(rows.start, rows.end))).map:
-      case (rowIndex, SingleRange(start, end)) => rowIndex.toLong + start.toLong * colFactor
-      case _ => throw Exception("Not expected result")
+    val resultPart2 = rows.par.map(currentRow => (sensors.par.foldLeft(RangeSet.empty) { (acc, sensor) =>
+        merge(acc, sensor.impossiblePositionsOnRow(currentRow))
+      }.shrinkTo(rows.start, rows.end), currentRow)).find(_._1.size == rows.end).map((rangeMatching, rowIndex) => (rowIndex, rangeMatching.findHoles(rows.start, rows.end))).map:
+        case (rowIndex, SingleRange(start, end)) => rowIndex.toLong + start.toLong * colFactor
+        case _ => throw Exception("Not expected result")
     .getOrElse(0l)
 
     val result1 = s"${resultPart1}"
@@ -71,12 +71,12 @@ end Solver
 def merge(range1: RangeSet, range2: RangeSet): RangeSet = range1.merge(range2)
 
 case class Sensor(x: Int, y: Int, closestBeacon: Beacon):
+  lazy val distanceToClosest = math.abs(x - closestBeacon.x) + math.abs(y - closestBeacon.y)
   def impossiblePositionsOnRow(row: Int): RangeSet =
-    val distanceToClosest = math.abs(x - closestBeacon.x) + math.abs(y - closestBeacon.y)
     val shortestDistanceToRow = math.abs(y - row)
     shortestDistanceToRow match
       case value if value <= distanceToClosest => SingleRange(x - (distanceToClosest - value), x + (distanceToClosest - value))
-      case _ => CompositeRange(Seq())
+      case _ => RangeSet.empty
 
   def xPosIfClosestBeaconOnRow(row: Int): Option[Int] =
     closestBeacon.y == row match
@@ -92,11 +92,46 @@ object Sensor:
 case class Beacon(x: Int, y: Int)
 
 
+case class Position(row: Int, col: Int)
+
+object Position:
+  def from(sensor: Sensor) = Position(sensor.y, sensor.x)
+
+
+class Square(size: Int):
+  var data = Array.fill(size, size)(false)
+  def addDiamond(center: Position, radius: Int): Unit =
+    for row <- center.row - radius to center.row + radius
+        col <- center.col - radius to center.col + radius
+        if data.isDefinedAt(row) && data(row).isDefinedAt(col)
+        if math.abs(row - center.row) + math.abs(col - center.col) <= radius
+    do
+      data(row)(col) = true
+  def findFree: Position =
+    val y = data.indexWhere(_.count(_ == false) > 0)
+    val x = data(y).indexWhere(_ == false)
+    Position(y, x)
+
+  private def asString(data: Array[Array[Char]]) =
+    data.map(_.mkString(" ")).mkString("\n")
+
+  private def toDisplay(boolean: Boolean): Char =
+    boolean match
+      case true => '#'
+      case _ => '.'
+
+  override def toString =
+    asString(data.map(_.map(toDisplay).map(_.toString.head)))
+
+
 sealed trait RangeSet:
   def merge(other: RangeSet): RangeSet
   def size: Int
   def shrinkTo(min: Int, max: Int): RangeSet
   def findHoles(min: Int, max: Int): RangeSet
+
+object RangeSet:
+  def empty: RangeSet = CompositeRange(Seq())
 
 case class SingleRange(start: Int, end: Int) extends RangeSet with Ordered[SingleRange]:
   require(start <= end)
@@ -105,7 +140,7 @@ case class SingleRange(start: Int, end: Int) extends RangeSet with Ordered[Singl
     this.compare(SingleRange(min, max)) match
       case value if value < 0 => SingleRange(this.end, max)
       case value if value > 0 => SingleRange(min, this.start)
-      case _ => CompositeRange(Seq())
+      case _ => RangeSet.empty
   override def size: Int = end - start + 1
 
   override def shrinkTo(min: Int, max: Int): RangeSet = SingleRange(math.max(start, min), math.min(end, max))
