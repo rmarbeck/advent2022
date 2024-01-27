@@ -21,7 +21,7 @@ val loggerAOCPart2 = Logger("aoc.part2")
 object Solver:
   def runOn(inputLines: Seq[String]): (String, String) =
 
-    val part1NumberOfRounds = 9
+    val part1NumberOfRounds = 10
 
     val elves = inputLines.zipWithIndex.flatMap:
       case (line, row) => line.zipWithIndex.foldLeft(List[Elf]()):
@@ -34,7 +34,7 @@ object Solver:
 
     val groveEmptyPlaces = groves(initialGrove, strats)
 
-    val result1 = s"${groveEmptyPlaces(part1NumberOfRounds)}"
+    val result1 = s"${groveEmptyPlaces(part1NumberOfRounds - 1)}"
     val result2 = s"${groveEmptyPlaces.length + 1}"
 
     (s"${result1}", s"${result2}")

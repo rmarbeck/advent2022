@@ -105,7 +105,7 @@ export Turn._
 
 case class Path(private val input: String):
   private val steps: List[Int] = input.split(Turn.keys).map(_.toInt).toList
-  private val turns: List[Turn] = input.filter(Turn.keys.contains(_)).map(Turn.from(_)).toList
+  private val turns: List[Turn] = input.filter(Turn.keys.contains).map(Turn.from).toList
 
   private val tunedForLastMoveSteps = steps :+ 0
   private val tunedForLastMoveTurns = turns ::: List(Clockwise, CounterClockwise)
